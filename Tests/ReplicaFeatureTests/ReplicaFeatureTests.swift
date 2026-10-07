@@ -1389,7 +1389,8 @@ struct ReplicaFeatureTests {
 		} withDependencies: {
 			$0.continuousClock = TestClock()
 			$0.date.now = now
-			$0.replicaClient.apply = { _, _, _ in ApplyOutcome(isCommitted: true, snapshot: snapshot([])) }
+			$0.replicaClient
+				.apply = { _, _, _ in ApplyOutcome(isCommitted: true, snapshot: snapshot([])) }
 			$0.timeZone = .gmt
 			$0.uuid = .incrementing
 		}
@@ -1659,7 +1660,11 @@ struct ReplicaFeatureTests {
 				guard attempts.value > 1 else {
 					throw ReplicaError.busy
 				}
-				return UndoOutcome(isApplied: true, snapshot: snapshot([milk], readIndex: 1), tasks: [UUID(0)])
+				return UndoOutcome(
+					isApplied: true,
+					snapshot: snapshot([milk], readIndex: 1),
+					tasks: [UUID(0)],
+				)
 			}
 			$0.timeZone = .gmt
 		}

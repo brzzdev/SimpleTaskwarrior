@@ -17,7 +17,8 @@ public final class ReplicaWindowController: NSWindowController, NSMenuItemValida
 	/// Read by the Remove menus' delegates too.
 	fileprivate let store: StoreOf<ReplicaFeature>
 
-	/// The alert on screen, for a failed write or a Done or Delete's question, so a store change while
+	/// The alert on screen, for a failed write or a Done or Delete's question, so a store change
+	/// while
 	/// it's up doesn't show a second.
 	private var alert: NSAlert?
 	private let commandItems = Dictionary(
@@ -507,7 +508,8 @@ public final class ReplicaWindowController: NSWindowController, NSMenuItemValida
 				return
 			}
 			// Only once validating, which can wait seconds on a held lock, is done: another window may
-			// have opened the folder meanwhile. This check and the store taking the folder as the window's
+			// have opened the folder meanwhile. This check and the store taking the folder as the
+			// window's
 			// run in one turn of the main actor, so none can open it in between.
 			let folder = standardizedFolder(directory)
 			let other = NSApp.windows

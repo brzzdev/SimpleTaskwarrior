@@ -33,7 +33,8 @@ final class InspectorController: NSViewController, NSMenuDelegate, NSTextFieldDe
 	private let descriptionSection: NSStackView
 	/// The sections below the tags, which only one task shows.
 	private let detailStack = verticalStack()
-	/// The tasks a field's edit belongs to, from its first keystroke, so a click on another row writes
+	/// The tasks a field's edit belongs to, from its first keystroke, so a click on another row
+	/// writes
 	/// it to the tasks it was typed for. Empty while no field has changed, which writes nothing.
 	private var editingTasks: [Models.Task.ID] = []
 	private let noSelectionView = EmptyStateView(
@@ -51,7 +52,8 @@ final class InspectorController: NSViewController, NSMenuDelegate, NSTextFieldDe
 	private let projectField = editableField(placeholder: noneTitle)
 	private let recurrenceLabel = WrappingLabel(wrappingLabelWithString: "")
 	private let recurrenceSection = verticalStack()
-	/// What the lists last showed, so a store change that leaves them alone, such as a search, doesn't
+	/// What the lists last showed, so a store change that leaves them alone, such as a search,
+	/// doesn't
 	/// build their rows again.
 	private var shownLists: InspectedLists?
 	/// The tags the bulk panel's list shows, as `shownLists` is for one task.
@@ -522,7 +524,8 @@ final class InspectorController: NSViewController, NSMenuDelegate, NSTextFieldDe
 		let projects = store.selectedProjects
 		// Nil where they differ, else the project they share, which may be none.
 		let project = projects.count == 1 ? projects.first : nil
-		projectField.placeholderString = project == nil ? String(localized: "Multiple Values") : noneTitle
+		projectField
+			.placeholderString = project == nil ? String(localized: "Multiple Values") : noneTitle
 		// As one task's fields keep what you typed while its write runs.
 		if isAnotherSelection || store.writeProgress == nil {
 			show(project.flatMap(\.self) ?? "", in: projectField, isAnotherTask: isAnotherSelection)
@@ -577,7 +580,9 @@ final class InspectorController: NSViewController, NSMenuDelegate, NSTextFieldDe
 			view.removeFromSuperview()
 		}
 		// The sections kept are already in order, so each new one goes in at its own index.
-		for (index, section) in sections.enumerated() where !udaStack.arrangedSubviews.contains(section) {
+		for (index, section) in sections.enumerated()
+			where !udaStack.arrangedSubviews.contains(section)
+		{
 			udaStack.insertArrangedSubview(section, at: index)
 			section.widthAnchor.constraint(equalTo: udaStack.widthAnchor).isActive = true
 		}

@@ -87,7 +87,8 @@ struct DateInputTests {
 		let duration = TaskDuration(seconds: seconds)
 
 		#expect(duration.description == display)
-		#expect(try DateInput(taskrc: taskrc(""), timeZone: .gmt).duration(display, at: .now) == duration)
+		#expect(try DateInput(taskrc: taskrc(""), timeZone: .gmt)
+			.duration(display, at: .now) == duration)
 	}
 
 	/// Under a `dateformat` of its own, in a zone off UTC by a fraction of an hour, and on both

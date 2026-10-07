@@ -88,7 +88,10 @@ private struct Fixture {
 		let taskrc = Taskrc(fixture: directory.appending(path: "taskrc"))
 		self.taskrc = taskrc
 		tasks = try JSONDecoder()
-			.decode([String: Record].self, from: Data(contentsOf: directory.appending(path: "tasks.json")))
+			.decode(
+				[String: Record].self,
+				from: Data(contentsOf: directory.appending(path: "tasks.json")),
+			)
 			.map { uuid, record in
 				let task = Models.Task(
 					properties: record.properties,

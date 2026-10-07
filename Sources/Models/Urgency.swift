@@ -112,7 +112,10 @@ extension UrgencyCoefficients {
 				return nil
 			}
 			self.value = value
-			if let name = key.prefixMatch(of: /urgency\.user\.(keyword|project|tag)\.(.*?)\.coefficient/) {
+			if
+				let name = key
+					.prefixMatch(of: /urgency\.user\.(keyword|project|tag)\.(.*?)\.coefficient/)
+			{
 				let argument = String(name.2)
 				switch name.1 {
 				case "keyword": match = .keyword(argument)
@@ -378,7 +381,8 @@ private enum DateState {
 private let epsilon = 1e-6
 
 extension Task {
-	/// TW's `has` and `get` in one: the stored text of any attribute, built-ins included, or nil for a
+	/// TW's `has` and `get` in one: the stored text of any attribute, built-ins included, or nil for
+	/// a
 	/// missing one, which `get` reads as "". TaskChampion keys a task by its UUID rather than storing
 	/// it, so TW adds `uuid` itself.
 	fileprivate func attribute(_ name: String) -> String? {

@@ -84,7 +84,10 @@ public final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate,
 	public func menuNeedsUpdate(_ menu: NSMenu) {
 		let replicas = NSDocumentController.shared.recentDocumentURLs.map { url in
 			let path = url.path(percentEncoded: false)
-			let replica = menuItem(FileManager.default.displayName(atPath: path), #selector(openRecent(_:)))
+			let replica = menuItem(
+				FileManager.default.displayName(atPath: path),
+				#selector(openRecent(_:)),
+			)
 			replica.image = NSWorkspace.shared.icon(forFile: path)
 			replica.image?.size = NSSize(width: 16, height: 16)
 			replica.representedObject = url

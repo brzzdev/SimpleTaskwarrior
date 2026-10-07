@@ -423,7 +423,8 @@ struct WritePlannerTests {
 		#expect(plan.operations.contains(.setValue(id, property: "review", value: "1893456000")))
 	}
 
-	/// `modified`, which the create stamps, is set before the defaults that refer to it. `modified+1d`
+	/// `modified`, which the create stamps, is set before the defaults that refer to it.
+	/// `modified+1d`
 	/// would resolve without it, since TW reads an unset attribute plus a duration from now.
 	@Test
 	func creatingATaskResolvesADefaultThatRefersToItsModifiedStamp() throws {
@@ -451,7 +452,11 @@ struct WritePlannerTests {
 		("default.due", "bogus", DateInputError.invalid),
 		("default.scheduled", "easter", DateInputError.holiday("easter")),
 	])
-	func creatingATaskWithAnUnresolvedDefaultThrows(key: String, text: String, error: DateInputError) {
+	func creatingATaskWithAnUnresolvedDefaultThrows(
+		key: String,
+		text: String,
+		error: DateInputError,
+	) {
 		let taskrc = Taskrc(path: "/taskrc", environment: .fixture) { path throws(Taskrc.ReadError) in
 			Taskrc.File(contents: "\(key)=\(text)", realPath: path)
 		}
@@ -597,7 +602,8 @@ struct WritePlannerTests {
 		}
 	}
 
-	/// So a `task modify recur:` that lands first fails the plan, rather than leaving a Series without
+	/// So a `task modify recur:` that lands first fails the plan, rather than leaving a Series
+	/// without
 	/// its `due`.
 	@Test
 	func removingDueExpectsNoRecur() throws {
@@ -1019,7 +1025,8 @@ extension WriteAction {
 	}
 
 	/// `edit` of the first pending instance with the rest of its Series, as
-	/// `recurrence.confirmation=yes` makes it. The patch is the same on every pending instance, so any
+	/// `recurrence.confirmation=yes` makes it. The patch is the same on every pending instance, so
+	/// any
 	/// stands for the one `task` was run on.
 	fileprivate static func editSeries(_ edit: TaskEdit, in recording: Recording) throws -> Self {
 		let instance = try #require(recording.pendingInstances().first)
