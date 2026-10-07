@@ -55,7 +55,8 @@ extension BookmarkClient: DependencyKey {
 			notifyChanges()
 		},
 		resolve: { bookmark in
-			// A stale bookmark still resolves, to where the folder moved, or to one made at its path since.
+			// A stale bookmark still resolves, to where the folder moved, or to one made at its path
+			// since.
 			try refreshed(bookmark)
 		},
 		saveTaskrc: { taskrc, replica in
@@ -122,7 +123,9 @@ private struct Pairing: Codable, Equatable {
 
 /// The path `bookmark` was made at, which it records even once it no longer resolves.
 public func bookmarkPath(_ bookmark: Data) -> URL? {
-	URL.resourceValues(forKeys: [.pathKey], fromBookmarkData: bookmark)?.path.map { URL(filePath: $0) }
+	URL.resourceValues(forKeys: [.pathKey], fromBookmarkData: bookmark)?
+		.path
+		.map { URL(filePath: $0) }
 }
 
 /// The index of the pairing whose Replica bookmark no longer resolves, but was made at the folder

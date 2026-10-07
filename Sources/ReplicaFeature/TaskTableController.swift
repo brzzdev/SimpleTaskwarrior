@@ -299,7 +299,8 @@ final class TaskTableController: NSViewController, NSMenuDelegate, NSTableViewDa
 		sendSortOrder()
 	}
 
-	/// Acts on the right-clicked row, selecting it first where it isn't already, as Finder does. Lists
+	/// Acts on the right-clicked row, selecting it first where it isn't already, as Finder does.
+	/// Lists
 	/// the commands the toolbar does, then the selection's project and tag edits.
 	private func updateRowMenu() {
 		let clicked = table.clickedRow
@@ -337,7 +338,8 @@ final class TaskTableController: NSViewController, NSMenuDelegate, NSTableViewDa
 				table.reloadData()
 			}
 		}
-		let selection = IndexSet(store.selection.compactMap { rows.index(id: $0).map { $0 + rowOffset } })
+		let selection = IndexSet(store.selection
+			.compactMap { rows.index(id: $0).map { $0 + rowOffset } })
 		if table.selectedRowIndexes != selection {
 			let added = selection.subtracting(table.selectedRowIndexes)
 			table.selectRowIndexes(selection, byExtendingSelection: false)

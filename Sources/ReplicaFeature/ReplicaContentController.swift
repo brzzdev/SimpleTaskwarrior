@@ -105,7 +105,8 @@ final class ReplicaContentController: NSViewController {
 
 			case .replaced:
 				unavailableView.title = String(localized: "This Replica Was Replaced")
-				unavailableView.message = path.map { String(localized: "A different Replica is now at \($0).") }
+				unavailableView.message = path
+					.map { String(localized: "A different Replica is now at \($0).") }
 			}
 			unavailableView.actions = [
 				store.canOpenReplacement ? openReplacementButton : nil,
@@ -186,7 +187,9 @@ final class ReplicaContentController: NSViewController {
 			banners.append(
 				BannerView(
 					symbolName: "info.circle",
-					message: String(localized: "The Taskrc's data.location is \(location), not this Replica."),
+					message: String(
+						localized: "The Taskrc's data.location is \(location), not this Replica.",
+					),
 					actions: [],
 				),
 			)

@@ -223,7 +223,8 @@ struct TaskrcTests {
 
 		let taskrc = Taskrc(fixture: directory.appending(path: "taskrc"))
 
-		// Set by the bundled theme and holiday files the app skips, or overridden by the CLI at runtime.
+		// Set by the bundled theme and holiday files the app skips, or overridden by the CLI at
+		// runtime.
 		let isComparable = { (key: String) in
 			!key.contains(/^(color|data\.location$|detection$|holiday\.|rule\.)/)
 		}

@@ -13,7 +13,8 @@ import TaskrcClient
 struct ReplicaFeature {
 	@ObservableState
 	struct State: Equatable {
-		/// Every task a fixed view shows, ranked and in `sortOrder`, which the sidebar and search narrow
+		/// Every task a fixed view shows, ranked and in `sortOrder`, which the sidebar and search
+		/// narrow
 		/// to `rows`.
 		var allRows: [TaskRow] = []
 		/// Locates the Replica, and is re-saved, which the window's restorable state keeps, where it's
@@ -30,7 +31,8 @@ struct ReplicaFeature {
 		var focusesDescription = false
 		/// Set once the hint that offers Choose Taskrc… has been shown, in any window.
 		@Shared(.appStorage("hasShownTaskrcHint")) var hasShownTaskrcHint = false
-		/// The task the inspector shows: the one selected task, kept by UUID until the selection changes,
+		/// The task the inspector shows: the one selected task, kept by UUID until the selection
+		/// changes,
 		/// even once it leaves the table.
 		var inspectedTask: Models.Task.ID?
 		var isNewTaskRowPresented = false
@@ -109,7 +111,8 @@ struct ReplicaFeature {
 			unavailable == .replaced
 		}
 
-		/// Whether Redo applies: while nothing has written since the undo, and nothing holds writes back.
+		/// Whether Redo applies: while nothing has written since the undo, and nothing holds writes
+		/// back.
 		var canRedo: Bool {
 			redoName != nil && canWrite
 		}
@@ -134,7 +137,8 @@ struct ReplicaFeature {
 			undoName != nil && canWrite
 		}
 
-		/// The folder the window claims as its Replica's, which no other window opens: none once another
+		/// The folder the window claims as its Replica's, which no other window opens: none once
+		/// another
 		/// window has the Replica.
 		var claimedDirectory: URL? {
 			unavailable == .openElsewhere ? nil : directory
@@ -446,7 +450,8 @@ struct ReplicaFeature {
 		case doneButtonTapped
 		case dontRepairChainButtonTapped
 		case fetchRequested
-		/// Return, Tab or clicking away from an inspector field, or choosing from its menu, for the tasks
+		/// Return, Tab or clicking away from an inspector field, or choosing from its menu, for the
+		/// tasks
 		/// it showed as you began typing.
 		case inspectorFieldSubmitted([Models.Task.ID], TaskEdit)
 		case markPendingButtonTapped
@@ -577,7 +582,8 @@ struct ReplicaFeature {
 			case let .directoryResolved(directory):
 				state.directory = directory
 				// Another window pairing or detaching changes this window's Taskrc too. Subscribed
-				// here rather than in the effect, so the subscription exists before the first load reads the
+				// here rather than in the effect, so the subscription exists before the first load reads
+				// the
 				// pairing and a change between the two can't be missed.
 				let changes = bookmarkClient.changes()
 				return .merge(
@@ -855,7 +861,8 @@ struct ReplicaFeature {
 
 			case .writeCommitted:
 				// A closed task can't stay kept, or the table brings it back. An edit queued behind the
-				// chain repair prompt keeps the tasks it edits; a close that fails leaves them open, so kept.
+				// chain repair prompt keeps the tasks it edits; a close that fails leaves them open, so
+				// kept.
 				state.keptTasks.subtract(state.leavingTasks)
 				selectCreatedTask(&state)
 				return finishWrite(&state)
@@ -1216,7 +1223,8 @@ struct ReplicaFeature {
 		return close(prompt.ids, prompt.command, chains: chains, series: prompt.series, &state)
 	}
 
-	/// Writes an inspector edit, of one task or several, to the tasks `ids`, keeping them in the table
+	/// Writes an inspector edit, of one task or several, to the tasks `ids`, keeping them in the
+	/// table
 	/// should the edit move them out.
 	private func edit(
 		_ ids: [Models.Task.ID],
@@ -1383,7 +1391,8 @@ struct ReplicaFeature {
 		taskrc.boolean(recurrenceConfirmation) ? Set(choices.ids) : []
 	}
 
-	/// A choice for each Series the tasks `ids` are Recurrence instances of, in the order of the first
+	/// A choice for each Series the tasks `ids` are Recurrence instances of, in the order of the
+	/// first
 	/// of each, named by its template's description, or the instance's where the template is gone,
 	/// since `task delete` still takes the siblings then.
 	private func seriesChoices(
@@ -1557,7 +1566,10 @@ struct ReplicaFeature {
 				try save(directory)
 			} catch: { error, send in
 				await send(
-					.taskrcSaveFailed(TaskrcSaveFailure(message: error.localizedDescription, canRetry: canRetry)),
+					.taskrcSaveFailed(TaskrcSaveFailure(
+						message: error.localizedDescription,
+						canRetry: canRetry,
+					)),
 				)
 			},
 			loadTaskrc(for: state),
@@ -1624,7 +1636,11 @@ private func lostReplica(_ error: any Error) -> ReplicaIdentity? {
 private func undoName(for action: WriteAction, udaColumns: [UDAColumn]) -> String {
 	switch action {
 	case let .complete(ids, _):
-		counted(ids, String(localized: "Complete Task"), String(localized: "Complete \(ids.count) Tasks"))
+		counted(
+			ids,
+			String(localized: "Complete Task"),
+			String(localized: "Complete \(ids.count) Tasks"),
+		)
 
 	case .create:
 		newTaskTitle

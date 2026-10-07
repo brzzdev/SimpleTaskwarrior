@@ -17,7 +17,8 @@ public struct WritePlanner: Sendable {
 
 	/// `ids`, each instance of a template in `series` followed by the rest of its Series: its pending
 	/// siblings, waiting ones included, in `imask` order, then the template, as a confirmed `task
-	/// delete` or `task modify` takes them. Found by scanning, so an instance the CLI generates before
+	/// delete` or `task modify` takes them. Found by scanning, so an instance the CLI generates
+	/// before
 	/// the plan commits is missed, but generating it grows the template's `mask`, which the plan
 	/// expects, so the plan is made again.
 	public static func withSeries(
@@ -459,7 +460,8 @@ public enum WriteAction: Equatable, Sendable {
 	/// `task done`, which leaves a task that isn't pending as it is.
 	case complete([Task.ID], chains: ChainRepair)
 	case create(Task.ID, description: String)
-	/// `task delete`, which keeps `start`. An instance of a template in `series` takes the rest of its
+	/// `task delete`, which keeps `start`. An instance of a template in `series` takes the rest of
+	/// its
 	/// Series with it, as `task delete` does under `recurrence.confirmation`.
 	case delete([Task.ID], chains: ChainRepair, series: Set<Task.ID> = [])
 	/// An edit of an instance of a template in `series` changes the rest of its Series too, where it
@@ -828,7 +830,9 @@ private struct Draft {
 
 	/// The changes, stamped with `modified` when there are any.
 	func operations(modified epoch: String) -> [WritePlan.Operation] {
-		let changed = Set(properties.keys).union(original.keys).filter { properties[$0] != original[$0] }
+		let changed = Set(properties.keys)
+			.union(original.keys)
+			.filter { properties[$0] != original[$0] }
 		guard !changed.isEmpty else {
 			return []
 		}
@@ -837,7 +841,10 @@ private struct Draft {
 			let value = property == "modified" ? epoch : properties[property]
 			operations.append(.setValue(id, property: property, value: value))
 		}
-		if changed.contains("status"), let status = properties["status"].flatMap(Status.init(rawValue:)) {
+		if
+			changed.contains("status"),
+			let status = properties["status"].flatMap(Status.init(rawValue:))
+		{
 			operations.append(.setStatus(id, status))
 		}
 		return operations

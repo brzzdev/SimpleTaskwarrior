@@ -53,7 +53,11 @@ public struct DateInput: Sendable {
 	}
 
 	private func expression(at now: Date) -> DateExpression {
-		DateExpression(clock: WallClock(now: now, timeZone: timeZone), format: format, settings: settings)
+		DateExpression(
+			clock: WallClock(now: now, timeZone: timeZone),
+			format: format,
+			settings: settings,
+		)
 	}
 }
 
@@ -131,7 +135,9 @@ public struct TaskDuration: Hashable, Sendable {
 		}
 		if hours != 0 || minutes != 0 || secondsPart != 0 {
 			iso += "T"
-			for (value, designator) in [(hours, "H"), (minutes, "M"), (secondsPart, "S")] where value != 0 {
+			for (value, designator) in [(hours, "H"), (minutes, "M"), (secondsPart, "S")]
+				where value != 0
+			{
 				iso += "\(value)\(designator)"
 			}
 		}

@@ -1,5 +1,6 @@
 // The part of TW's `Lexer`, `Eval` and `Variant` that `task` 3.5 runs a date or duration value
-// through: arithmetic on dates, durations, numbers and text, with the task's attributes as operands.
+// through: arithmetic on dates, durations, numbers and text, with the task's attributes as
+// operands.
 import Foundation
 
 /// Why an expression has no value.
@@ -234,7 +235,8 @@ struct DateExpression {
 				}
 
 			case let .duration(text):
-				let duration = DurationLiteral.parse(text).flatMap { $0.end == text.count ? $0.seconds : nil }
+				let duration = DurationLiteral.parse(text)
+					.flatMap { $0.end == text.count ? $0.seconds : nil }
 				values.append(.duration(duration ?? 0))
 
 			case let .identifier(name):
@@ -709,7 +711,10 @@ private struct Lexer {
 		}
 		// `Lexer::isWord`: up to whitespace or an operator.
 		var end = cursor + 1
-		while end < text.count, !isWhitespace(byte(at: end)), !isSingleCharacterOperator(byte(at: end)) {
+		while
+			end < text.count, !isWhitespace(byte(at: end)),
+			!isSingleCharacterOperator(byte(at: end))
+		{
 			end += 1
 		}
 		return textToken(until: end)
