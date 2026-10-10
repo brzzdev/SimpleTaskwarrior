@@ -144,6 +144,13 @@ struct ReplicaFeature {
 			unavailable == .openElsewhere ? nil : directory
 		}
 
+		/// What Copy Description and ⌘C in the table copy: the selected tasks' descriptions, one per
+		/// line in the table's order. Nil with no task selected, which disables both.
+		var copiedDescriptions: String? {
+			let descriptions = rows.filter { selection.contains($0.id) }.map(\.task.description)
+			return descriptions.isEmpty ? nil : descriptions.joined(separator: "\n")
+		}
+
 		/// The commands that apply to every selected task. None applies while a write would queue, or
 		/// while the new-task row is open, whose Return would find the write in the way. Read once for
 		/// all of them, since the selection is looked up for each read.

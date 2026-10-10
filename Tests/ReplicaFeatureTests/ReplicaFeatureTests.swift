@@ -305,6 +305,23 @@ struct ReplicaFeatureTests {
 	}
 
 	@Test
+	func copiedDescriptionsListTheSelectedTasksOnePerLineInTheTablesOrder() throws {
+		var state = try loadedState([
+			storedTask(2, "File taxes", workingSetID: 3),
+			storedTask(0, "Buy milk", workingSetID: 1),
+			storedTask(1, "Walk the dog", workingSetID: 2),
+		])
+
+		#expect(state.copiedDescriptions == nil)
+
+		state.selection = [UUID(0)]
+		#expect(state.copiedDescriptions == "Buy milk")
+
+		state.selection = [UUID(0), UUID(1), UUID(2)]
+		#expect(state.copiedDescriptions == "File taxes\nBuy milk\nWalk the dog")
+	}
+
+	@Test
 	func doneThatBreaksAChainAsksBeforeRepairingIt() async throws {
 		let tasks = chain()
 		let plans = LockIsolated<[WritePlan]>([])

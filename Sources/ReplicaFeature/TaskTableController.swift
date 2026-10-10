@@ -8,8 +8,8 @@ import Taskrc
 /// Shows the rows in the reducer's order, under the new-task row while New Task has it open, and
 /// sends back the selection and the sort. AppKit autosaves the columns' widths, order and
 /// visibility, and the sort, under the Replica's name.
-final class TaskTableController: NSViewController, NSMenuDelegate, NSTableViewDataSource,
-	NSTableViewDelegate, NSTextFieldDelegate
+final class TaskTableController: NSViewController, NSMenuDelegate, NSMenuItemValidation,
+	NSTableViewDataSource, NSTableViewDelegate, NSTextFieldDelegate
 {
 	private let autosaveName: String
 	/// The sort a Replica starts with, which a saved one replaces. Kept from the start, since
@@ -64,7 +64,14 @@ final class TaskTableController: NSViewController, NSMenuDelegate, NSTableViewDa
 		let headerMenu = NSMenu()
 		headerMenu.delegate = self
 		table.headerView?.menu = headerMenu
-		rowMenu.items = ReplicaWindowController.taskCommandMenuItems()
+		// Aimed at the table, so it copies the descriptions even while a field elsewhere has focus.
+		let copyItem = NSMenuItem(
+			title: String(localized: "Copy Description"),
+			action: #selector(copy(_:)),
+			keyEquivalent: "c",
+		)
+		copyItem.target = self
+		rowMenu.items = ReplicaWindowController.taskCommandMenuItems() + [.separator(), copyItem]
 		rowMenu.delegate = self
 		table.menu = rowMenu
 		table.dataSource = self
@@ -103,6 +110,17 @@ final class TaskTableController: NSViewController, NSMenuDelegate, NSTableViewDa
 			return
 		}
 		store.send(.newTaskDescriptionSubmitted(field.stringValue))
+	}
+
+	/// Copies the selected tasks' descriptions, from Copy Description and from Edit ▸ Copy while the
+	/// table has focus.
+	@objc
+	func copy(_: Any?) {
+		guard let descriptions = store.copiedDescriptions else {
+			return
+		}
+		NSPasteboard.general.clearContents()
+		NSPasteboard.general.setString(descriptions, forType: .string)
 	}
 
 	func menuNeedsUpdate(_ menu: NSMenu) {
@@ -177,6 +195,13 @@ final class TaskTableController: NSViewController, NSMenuDelegate, NSTableViewDa
 		}
 		let selection = Set(table.selectedRowIndexes.compactMap { row(at: $0)?.id })
 		store.send(.binding(.set(\.selection, selection)))
+	}
+
+	func validateMenuItem(_ menuItem: NSMenuItem) -> Bool {
+		guard menuItem.action == #selector(copy(_:)) else {
+			return true
+		}
+		return store.copiedDescriptions != nil
 	}
 
 	/// Adds `tableColumn`, starting fitted to `widestCell` where one is given.
@@ -300,8 +325,7 @@ final class TaskTableController: NSViewController, NSMenuDelegate, NSTableViewDa
 	}
 
 	/// Acts on the right-clicked row, selecting it first where it isn't already, as Finder does.
-	/// Lists
-	/// the commands the toolbar does, then the selection's project and tag edits.
+	/// Lists the commands the toolbar does, then the selection's edits, then Copy Description.
 	private func updateRowMenu() {
 		let clicked = table.clickedRow
 		if row(at: clicked) != nil, !table.selectedRowIndexes.contains(clicked) {
