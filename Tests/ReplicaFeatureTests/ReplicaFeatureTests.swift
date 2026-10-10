@@ -2362,9 +2362,9 @@ struct ReplicaFeatureTests {
 
 	@Test
 	func sidebarCountsAStartedTaskUnderBothActiveAndPending() throws {
-		let start = ["start": String(Int(now.timeIntervalSince1970))]
+		let started = ["start": String(Int(now.timeIntervalSince1970))]
 		let rows = try (0 ..< 5).map { seed in
-			try row(storedTask(seed, "Task \(seed)", workingSetID: seed + 1, seed < 2 ? start : [:]))
+			try row(storedTask(seed, "Task \(seed)", workingSetID: seed + 1, seed < 2 ? started : [:]))
 		}
 
 		let sidebar = Sidebar(rows: rows, selection: [])
