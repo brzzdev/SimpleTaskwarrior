@@ -168,7 +168,8 @@ func mainMenu(
 	NSApp.helpMenu = help
 
 	let menu = NSMenu()
-	menu.items = [app, file, edit, view, task, window, help].map(submenu)
+	let prototype = PrototypeExcludeMenu.shared.menu()
+	menu.items = [app, file, edit, view, task, window, prototype, help].map(submenu)
 	return menu
 }
 

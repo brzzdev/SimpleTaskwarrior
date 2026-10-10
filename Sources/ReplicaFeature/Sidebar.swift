@@ -53,6 +53,8 @@ struct Sidebar: Equatable {
 		var name: String
 	}
 
+	/// PROTOTYPE: listed among `tags`, counting the tasks they hide.
+	var excludedTags: Set<String>
 	// Both named and counted from the selected views' tasks.
 	var projects: [Project]
 	var tags: [Count]
@@ -60,12 +62,15 @@ struct Sidebar: Equatable {
 
 	/// The sidebar over `rows`, keeping every selected project and tag listed, at a count of 0 where
 	/// no task has it.
-	init(rows: [TaskRow], selection: Set<SidebarItem>) {
+	init(rows: [TaskRow], selection: Set<SidebarItem>, excludedTags: Set<String> = []) {
+		self.excludedTags = excludedTags
+		let visible = rows.filter { $0.task.tags.isDisjoint(with: excludedTags) }
 		views = TaskView.all.map { view in
-			Count(count: rows.count { $0.views.contains(view) }, item: .view(view))
+			Count(count: visible.count { $0.views.contains(view) }, item: .view(view))
 		}
 		let filter = SidebarFilter(selection)
-		let listed = rows.filter(filter.isInSelectedViews)
+		let inViews = rows.filter(filter.isInSelectedViews)
+		let listed = inViews.filter { $0.task.tags.isDisjoint(with: excludedTags) }
 
 		var projectCounts = zeroCounts(filter.projects.flatMap(\.ancestry))
 		for name in listed.compactMap(\.task.project).flatMap(\.ancestry) {
@@ -73,9 +78,12 @@ struct Sidebar: Equatable {
 		}
 		projects = Project.children(of: nil, in: projectCounts)
 
-		var tagCounts = zeroCounts(filter.tags)
+		var tagCounts = zeroCounts(filter.tags + excludedTags)
 		for tag in listed.flatMap(\.task.tags) {
 			tagCounts[tag, default: 0] += 1
+		}
+		for tag in excludedTags {
+			tagCounts[tag] = inViews.count { $0.task.tags.contains(tag) }
 		}
 		tags = byName(tagCounts).map { Count(count: $0.value, item: .tag($0.key)) }
 	}

@@ -6,7 +6,9 @@ import Taskrc
 
 /// A source list of the store's sidebar, which sends back its selection, and a footer naming the
 /// active Context.
-final class SidebarController: NSViewController, NSOutlineViewDataSource, NSOutlineViewDelegate {
+final class SidebarController: NSViewController, NSMenuDelegate, NSOutlineViewDataSource,
+	NSOutlineViewDelegate
+{
 	private let contextFooter = NSStackView()
 	private let contextLabel = truncatingLabel()
 	/// Kept here, since a reload makes new nodes and forgets which were expanded.
@@ -14,7 +16,8 @@ final class SidebarController: NSViewController, NSOutlineViewDataSource, NSOutl
 	/// Set while the outline follows the store, so the changes it makes aren't sent back.
 	private var isFollowingStore = false
 	private var nodes: [SidebarNode] = []
-	private let outline = NSOutlineView()
+	private var variantObserver: (any NSObjectProtocol)?
+	private let outline = PrototypeOutlineView()
 	private var sidebar: Sidebar?
 	private let store: StoreOf<ReplicaFeature>
 
@@ -72,6 +75,30 @@ final class SidebarController: NSViewController, NSOutlineViewDataSource, NSOutl
 		outline.style = .sourceList
 		outline.dataSource = self
 		outline.delegate = self
+		outline.menu = NSMenu()
+		outline.menu?.delegate = self
+		outline.altClicked = { [weak self] row in
+			guard
+				let self,
+				PrototypeExcludeVariant.current == .altClick,
+				let node = outline.item(atRow: row) as? SidebarNode,
+				case let .tag(tag)? = node.item
+			else {
+				return false
+			}
+			toggleExcluded(tag)
+			return true
+		}
+		variantObserver = NotificationCenter.default.addObserver(
+			forName: PrototypeExcludeVariant.changed,
+			object: nil,
+			queue: .main,
+		) { [weak self] _ in
+			MainActor.assumeIsolated {
+				self?.sidebar = nil
+				self?.updateOutline()
+			}
+		}
 
 		observe { [weak self] in
 			self?.updateOutline()
@@ -127,7 +154,40 @@ final class SidebarController: NSViewController, NSOutlineViewDataSource, NSOutl
 	}
 
 	func outlineView(_: NSOutlineView, shouldSelectItem item: Any) -> Bool {
-		(item as? SidebarNode)?.item != nil
+		guard let node = item as? SidebarNode else {
+			return false
+		}
+		return node.item != nil && !node.isExcluded
+	}
+
+	func menuNeedsUpdate(_ menu: NSMenu) {
+		menu.removeAllItems()
+		guard
+			PrototypeExcludeVariant.current == .hiddenSection,
+			let node = outline.item(atRow: outline.clickedRow) as? SidebarNode,
+			case let .tag(tag)? = node.item
+		else {
+			return
+		}
+		let title = node.isExcluded
+			? "Show Tasks Tagged “\(tag)”"
+			: "Hide Tasks Tagged “\(tag)”"
+		let item = NSMenuItem(
+			title: title,
+			action: #selector(toggleMenuItemChosen(_:)),
+			keyEquivalent: "",
+		)
+		item.representedObject = tag
+		item.target = self
+		menu.addItem(item)
+	}
+
+	@objc
+	func toggleMenuItemChosen(_ sender: NSMenuItem) {
+		guard let tag = sender.representedObject as? String else {
+			return
+		}
+		toggleExcluded(tag)
 	}
 
 	func outlineView(_: NSOutlineView, viewFor _: NSTableColumn?, item: Any) -> NSView? {
@@ -140,7 +200,11 @@ final class SidebarController: NSViewController, NSOutlineViewDataSource, NSOutl
 			return cell
 		}
 		let cell = outline.reusedCell(ItemCell.init)
-		cell.configure(item, count: node.count)
+		var onEye: (() -> Void)?
+		if PrototypeExcludeVariant.current == .eyeToggle, case let .tag(tag) = item {
+			onEye = { [weak self] in self?.toggleExcluded(tag) }
+		}
+		cell.configure(item, count: node.count, isExcluded: node.isExcluded, onEye: onEye)
 		return cell
 	}
 
@@ -168,6 +232,19 @@ final class SidebarController: NSViewController, NSOutlineViewDataSource, NSOutl
 		store.send(.binding(.set(\.sidebarSelection, selection)))
 	}
 
+	private func toggleExcluded(_ tag: String) {
+		var excluded = store.excludedTags
+		if excluded.remove(tag) == nil {
+			excluded.insert(tag)
+			if store.sidebarSelection.contains(.tag(tag)) {
+				var selection = store.sidebarSelection
+				selection.remove(.tag(tag))
+				store.send(.binding(.set(\.sidebarSelection, selection)))
+			}
+		}
+		store.send(.binding(.set(\.excludedTags, excluded)))
+	}
+
 	private func children(of item: Any?) -> [SidebarNode] {
 		guard let node = item as? SidebarNode else {
 			return nodes
@@ -191,7 +268,7 @@ final class SidebarController: NSViewController, NSOutlineViewDataSource, NSOutl
 		}
 		if sidebar != self.sidebar {
 			self.sidebar = sidebar
-			nodes = SidebarNode.sections(of: sidebar)
+			nodes = SidebarNode.sections(of: sidebar, variant: PrototypeExcludeVariant.current)
 			outline.reloadData()
 		}
 		for case let .project(name) in selection {
@@ -227,6 +304,7 @@ private final class SidebarNode {
 	let children: [SidebarNode]
 	/// 0 for a section header, which shows none.
 	let count: Int
+	let isExcluded: Bool
 	let item: SidebarItem?
 	let title: String
 
@@ -234,32 +312,44 @@ private final class SidebarNode {
 	init(title: String, children: [SidebarNode]) {
 		self.children = children
 		count = 0
+		isExcluded = false
 		item = nil
 		self.title = title
 	}
 
-	init(_ item: SidebarItem, count: Int, children: [SidebarNode] = []) {
+	init(_ item: SidebarItem, count: Int, children: [SidebarNode] = [], isExcluded: Bool = false) {
 		self.children = children
 		self.count = count
+		self.isExcluded = isExcluded
 		self.item = item
 		title = item.title
 	}
 
 	/// The fixed views, then a Projects and a Tags section where either has any.
-	static func sections(of sidebar: Sidebar) -> [SidebarNode] {
+	static func sections(of sidebar: Sidebar, variant: PrototypeExcludeVariant) -> [SidebarNode] {
 		var sections = sidebar.views.map { SidebarNode($0.item, count: $0.count) }
 		if !sidebar.projects.isEmpty {
 			sections.append(
 				SidebarNode(title: String(localized: "Projects"), children: sidebar.projects.map(project)),
 			)
 		}
-		if !sidebar.tags.isEmpty {
-			sections.append(
-				SidebarNode(
-					title: String(localized: "Tags"),
-					children: sidebar.tags.map { SidebarNode($0.item, count: $0.count) },
-				),
-			)
+		func node(_ count: Sidebar.Count) -> SidebarNode {
+			let isExcluded =
+				if case let .tag(tag) = count.item {
+					sidebar.excludedTags.contains(tag)
+				} else {
+					false
+				}
+			return SidebarNode(count.item, count: count.count, isExcluded: isExcluded)
+		}
+		let tags = sidebar.tags.map(node)
+		let shown = variant == .hiddenSection ? tags.filter { !$0.isExcluded } : tags
+		if !shown.isEmpty {
+			sections.append(SidebarNode(title: String(localized: "Tags"), children: shown))
+		}
+		let hidden = tags.filter(\.isExcluded)
+		if variant == .hiddenSection, !hidden.isEmpty {
+			sections.append(SidebarNode(title: "Hidden", children: hidden))
 		}
 		return sections
 	}
@@ -324,6 +414,10 @@ private final class HeaderCell: NSTableCellView {
 /// A symbol, a title and a count.
 private final class ItemCell: NSTableCellView {
 	private let countLabel = NSTextField(labelWithString: "")
+	private let eye = NSButton()
+	private var isExcluded = false
+	private var isHovered = false
+	private var onEye: (() -> Void)?
 
 	init() {
 		super.init(frame: .zero)
@@ -333,7 +427,11 @@ private final class ItemCell: NSTableCellView {
 		title.setContentHuggingPriority(.defaultLow, for: .horizontal)
 		countLabel.font = .monospacedDigitSystemFont(ofSize: NSFont.systemFontSize, weight: .regular)
 		countLabel.setContentCompressionResistancePriority(.required, for: .horizontal)
-		let stack = NSStackView(views: [symbol, title, countLabel])
+		eye.isBordered = false
+		eye.target = self
+		eye.action = #selector(eyeClicked)
+		eye.setContentCompressionResistancePriority(.required, for: .horizontal)
+		let stack = NSStackView(views: [symbol, title, eye, countLabel])
 		stack.distribution = .fill
 		stack.setCustomSpacing(4, after: symbol)
 		stack.translatesAutoresizingMaskIntoConstraints = false
@@ -354,7 +452,35 @@ private final class ItemCell: NSTableCellView {
 		fatalError("init(coder:) has not been implemented")
 	}
 
-	func configure(_ item: SidebarItem, count: Int) {
+	override func updateTrackingAreas() {
+		super.updateTrackingAreas()
+		trackingAreas.forEach(removeTrackingArea)
+		addTrackingArea(NSTrackingArea(
+			rect: bounds,
+			options: [.activeAlways, .inVisibleRect, .mouseEnteredAndExited],
+			owner: self,
+		))
+	}
+
+	override func mouseEntered(with _: NSEvent) {
+		isHovered = true
+		updateEye()
+	}
+
+	override func mouseExited(with _: NSEvent) {
+		isHovered = false
+		updateEye()
+	}
+
+	@objc
+	func eyeClicked() {
+		onEye?()
+	}
+
+	func configure(_ item: SidebarItem, count: Int, isExcluded: Bool, onEye: (() -> Void)?) {
+		self.isExcluded = isExcluded
+		self.onEye = onEye
+		updateEye()
 		countLabel.stringValue = String(count)
 		// A fixed view's count reads brighter than a project's or tag's.
 		if case .view = item {
@@ -362,8 +488,33 @@ private final class ItemCell: NSTableCellView {
 		} else {
 			countLabel.textColor = .tertiaryLabelColor
 		}
-		imageView?.image = NSImage(systemSymbolName: item.symbolName, accessibilityDescription: nil)
-		textField?.stringValue = item.title
+		imageView?.image = NSImage(
+			systemSymbolName: isExcluded ? "tag.slash" : item.symbolName,
+			accessibilityDescription: nil,
+		)
+		imageView?.contentTintColor = isExcluded ? .secondaryLabelColor : nil
+		guard isExcluded else {
+			textField?.textColor = .labelColor
+			textField?.stringValue = item.title
+			return
+		}
+		// Struck through, and the count reads as the tasks it hides.
+		textField?.attributedStringValue = NSAttributedString(
+			string: item.title,
+			attributes: [
+				.foregroundColor: NSColor.secondaryLabelColor,
+				.strikethroughStyle: NSUnderlineStyle.single.rawValue,
+			],
+		)
+	}
+
+	private func updateEye() {
+		eye.isHidden = onEye == nil || !(isHovered || isExcluded)
+		eye.image = NSImage(
+			systemSymbolName: isExcluded ? "eye.slash" : "eye",
+			accessibilityDescription: isExcluded ? "Show tasks" : "Hide tasks",
+		)
+		eye.contentTintColor = isExcluded ? .secondaryLabelColor : .tertiaryLabelColor
 	}
 }
 

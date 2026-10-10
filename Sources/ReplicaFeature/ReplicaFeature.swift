@@ -26,6 +26,8 @@ struct ReplicaFeature {
 		var creatingTask: Models.Task.ID?
 		/// The Replica's folder, or where it last was while the window can't open it.
 		var directory: URL?
+		/// PROTOTYPE: tags whose tasks the table and sidebar counts leave out.
+		var excludedTags: Set<String> = []
 		/// Set as New Task selects the task it created, for the inspector to put the cursor in its
 		/// description, until the selection changes.
 		var focusesDescription = false
@@ -239,7 +241,7 @@ struct ReplicaFeature {
 		}
 
 		var sidebar: Sidebar {
-			Sidebar(rows: allRows, selection: sidebarSelection)
+			Sidebar(rows: allRows, selection: sidebarSelection, excludedTags: excludedTags)
 		}
 
 		/// Whether a write can start now, rather than queue: not while one is in progress, nor while a
@@ -554,7 +556,7 @@ struct ReplicaFeature {
 				// Should it queue, `finishWrite` gives it its entry again as it starts.
 				return edit([id], .addAnnotation(text, entry: annotationEntry(for: id, state)), &state)
 
-			case .binding(\.searchText), .binding(\.sidebarSelection):
+			case .binding(\.excludedTags), .binding(\.searchText), .binding(\.sidebarSelection):
 				state.keptTasks = []
 				filterRows(&state)
 				return .none
@@ -1531,13 +1533,16 @@ struct ReplicaFeature {
 		state.rows = IdentifiedArray(
 			uniqueElements: state.allRows.filter { [
 				filter = SidebarFilter(state.sidebarSelection),
+				excluded = state.excludedTags,
 				kept = state.keptTasks,
 				search = state.searchText,
 			] in
 				guard !state.leavingTasks.contains($0.id) else {
 					return false
 				}
-				return kept.contains($0.id) || filter.includes($0) && $0.matches(search: search)
+				return kept.contains($0.id)
+					|| filter.includes($0) && $0.task.tags.isDisjoint(with: excluded)
+					&& $0.matches(search: search)
 			},
 		)
 		let selectedCount = state.selection.count
