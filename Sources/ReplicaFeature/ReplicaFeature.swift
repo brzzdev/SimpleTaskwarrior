@@ -1340,6 +1340,9 @@ struct ReplicaFeature {
 			return write(.markPending(ids), &state)
 
 		case .startStop:
+			// They show where Start or Stop leaves them, as in and out of Active, even where an edit
+			// kept them. One that fails to write stays as it was, so shows as it did.
+			state.keptTasks.subtract(ids)
 			return write(state.isStopping ? .stop(ids) : .start(ids), &state)
 		}
 	}
