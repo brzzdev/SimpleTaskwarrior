@@ -147,7 +147,7 @@ struct ReplicaFeature {
 		/// What Copy Description and ⌘C in the table copy: the selected tasks' descriptions, one per
 		/// line in the table's order. Nil with no task selected, which disables both.
 		var copiedDescriptions: String? {
-			let descriptions = rows.filter { selection.contains($0.id) }.map(\.task.description)
+			let descriptions = selectedIDs.compactMap { rows[id: $0]?.task.description }
 			return descriptions.isEmpty ? nil : descriptions.joined(separator: "\n")
 		}
 

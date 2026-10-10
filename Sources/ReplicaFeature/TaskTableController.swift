@@ -112,8 +112,7 @@ final class TaskTableController: NSViewController, NSMenuDelegate, NSMenuItemVal
 		store.send(.newTaskDescriptionSubmitted(field.stringValue))
 	}
 
-	/// Copies the selected tasks' descriptions, from Copy Description and from Edit ▸ Copy while the
-	/// table has focus.
+	/// Edit ▸ Copy reaches this only while the table has focus, since a field takes it first.
 	@objc
 	func copy(_: Any?) {
 		guard let descriptions = store.copiedDescriptions else {
