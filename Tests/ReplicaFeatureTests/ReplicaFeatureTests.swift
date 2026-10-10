@@ -2433,96 +2433,19 @@ struct ReplicaFeatureTests {
 		#expect(store.state.sidebar.views.map(\.count) == [1, 3, 1, 0, 0])
 	}
 
-	@Test
-	func stoppingAnEditKeptTaskDropsItFromActive() async throws {
-		let started = String(Int(now.timeIntervalSince1970))
-		let bike = storedTask(0, "Fix the bike", workingSetID: 1, ["start": started])
-		let tagged = storedTask(
-			0,
-			"Fix the bike",
-			workingSetID: 1,
-			["start": started, "tag_outdoor": "x"],
+	@Test(arguments: releasingWrites)
+	func releasingAnEditKeptTaskDropsItFromItsView(
+		bike: StoredTask,
+		view: TaskView,
+		button: ReplicaFeature.Action,
+	) async throws {
+		let tagged = StoredTask(
+			properties: bike.properties.merging(["tag_outdoor": "x"]) { $1 },
+			uuid: bike.uuid,
+			workingSetID: bike.workingSetID,
 		)
-		let stopped = storedTask(0, "Fix the bike", workingSetID: 1, ["tag_outdoor": "x"])
-		let snapshots = LockIsolated([tagged, stopped])
-		var initialState = try loadedState([bike], selection: [UUID(0)])
-		initialState.sidebarSelection = [.view(.active)]
-		let store = TestStore(initialState: initialState) {
-			ReplicaFeature()
-		} withDependencies: {
-			$0.continuousClock = TestClock()
-			$0.date.now = now
-			$0.replicaClient.apply = { _, _, _ in
-				let task = snapshots.withValue { $0.removeFirst() }
-				return ApplyOutcome(isCommitted: true, snapshot: snapshot([task]))
-			}
-			$0.timeZone = .gmt
-		}
-		store.exhaustivity = .off
-
-		await store.send(.inspectorFieldSubmitted([UUID(0)], .addTags(["outdoor"])))
-		await store.receive(\.writeCommitted)
-		await store.send(.startStopButtonTapped)
-		await store.receive(\.writeCommitted)
-
-		#expect(store.state.rows.isEmpty)
-		#expect(store.state.sidebar.views.map(\.count) == [0, 1, 0, 0, 0])
-	}
-
-	@Test
-	func aStopThatFailsKeepsWhatAnEditKept() async throws {
-		let started = String(Int(now.timeIntervalSince1970))
-		let bike = storedTask(0, "Fix the bike", workingSetID: 1, ["project": "Home", "start": started])
-		let moved = storedTask(
-			0,
-			"Fix the bike",
-			workingSetID: 1,
-			["project": "Work", "start": started],
-		)
-		let attempts = LockIsolated(0)
-		var initialState = try loadedState([bike], selection: [UUID(0)])
-		initialState.sidebarSelection = [.project("Home"), .view(.active)]
-		let store = TestStore(initialState: initialState) {
-			ReplicaFeature()
-		} withDependencies: {
-			$0.continuousClock = TestClock()
-			$0.date.now = now
-			$0.replicaClient.apply = { _, _, _ in
-				let attempt = attempts.withValue {
-					$0 += 1
-					return $0
-				}
-				guard attempt == 1 else {
-					throw ReplicaError.failed("The disk is full.")
-				}
-				return ApplyOutcome(isCommitted: true, snapshot: snapshot([moved]))
-			}
-			$0.timeZone = .gmt
-		}
-		store.exhaustivity = .off
-
-		// Moves the task out of Home, which only the keep holds it in.
-		await store.send(.inspectorFieldSubmitted([UUID(0)], .set("project", .string("Work"))))
-		await store.receive(\.writeCommitted)
-		await store.send(.startStopButtonTapped)
-		await store.receive(\.writeFailed)
-		await store.send(.writeFailureDismissed)
-
-		#expect(store.state.rows.map(\.id) == [UUID(0)])
-	}
-
-	@Test(arguments: [("completed", TaskView.completed), ("deleted", .deleted)])
-	func markingAnEditKeptTaskPendingDropsItFromItsView(status: String, view: TaskView) async throws {
-		let bike = storedTask(0, "Fix the bike", status: status, workingSetID: nil)
-		let tagged = storedTask(
-			0,
-			"Fix the bike",
-			status: status,
-			workingSetID: nil,
-			["tag_outdoor": "x"],
-		)
-		let pending = storedTask(0, "Fix the bike", workingSetID: 1, ["tag_outdoor": "x"])
-		let snapshots = LockIsolated([tagged, pending])
+		let released = storedTask(0, "Fix the bike", workingSetID: 1, ["tag_outdoor": "x"])
+		let snapshots = LockIsolated([tagged, released])
 		var initialState = try loadedState([bike], selection: [UUID(0)])
 		initialState.sidebarSelection = [.view(view)]
 		let store = TestStore(initialState: initialState) {
@@ -2540,38 +2463,32 @@ struct ReplicaFeatureTests {
 
 		await store.send(.inspectorFieldSubmitted([UUID(0)], .addTags(["outdoor"])))
 		await store.receive(\.writeCommitted)
-		await store.send(.markPendingButtonTapped)
+		await store.send(button)
 		await store.receive(\.writeCommitted)
 
 		#expect(store.state.rows.isEmpty)
 		#expect(store.state.sidebar.views.map(\.count) == [0, 1, 0, 0, 0])
 	}
 
-	@Test
-	func aMarkPendingThatFailsKeepsWhatAnEditKept() async throws {
-		let bike = storedTask(
-			0,
-			"Fix the bike",
-			status: "completed",
-			workingSetID: nil,
-			["project": "Home"],
-		)
-		let moved = storedTask(
-			0,
-			"Fix the bike",
-			status: "completed",
-			workingSetID: nil,
-			["project": "Work"],
-		)
+	@Test(arguments: releasingWrites)
+	func aReleasingWriteThatFailsKeepsWhatAnEditKept(
+		bike: StoredTask,
+		view: TaskView,
+		button: ReplicaFeature.Action,
+	) async throws {
+		var bike = bike
+		bike.properties["project"] = "Home"
+		var moved = bike
+		moved.properties["project"] = "Work"
 		let attempts = LockIsolated(0)
 		var initialState = try loadedState([bike], selection: [UUID(0)])
-		initialState.sidebarSelection = [.project("Home"), .view(.completed)]
+		initialState.sidebarSelection = [.project("Home"), .view(view)]
 		let store = TestStore(initialState: initialState) {
 			ReplicaFeature()
 		} withDependencies: {
 			$0.continuousClock = TestClock()
 			$0.date.now = now
-			$0.replicaClient.apply = { _, _, _ in
+			$0.replicaClient.apply = { [moved] _, _, _ in
 				let attempt = attempts.withValue {
 					$0 += 1
 					return $0
@@ -2588,7 +2505,7 @@ struct ReplicaFeatureTests {
 		// Moves the task out of Home, which only the keep holds it in.
 		await store.send(.inspectorFieldSubmitted([UUID(0)], .set("project", .string("Work"))))
 		await store.receive(\.writeCommitted)
-		await store.send(.markPendingButtonTapped)
+		await store.send(button)
 		await store.receive(\.writeFailed)
 		await store.send(.writeFailureDismissed)
 
@@ -2808,6 +2725,31 @@ private struct TaskStreams {
 
 /// When every test task was entered, so none has aged.
 private let now = Date(timeIntervalSince1970: 1_790_000_000)
+
+/// A task each write that releases what an edit kept moves out of its view, with that view and
+/// the button that writes it.
+private let releasingWrites: [(StoredTask, TaskView, ReplicaFeature.Action)] = [
+	(
+		storedTask(
+			0,
+			"Fix the bike",
+			workingSetID: 1,
+			["start": String(Int(now.timeIntervalSince1970))],
+		),
+		.active,
+		.startStopButtonTapped,
+	),
+	(
+		storedTask(0, "Fix the bike", status: "completed", workingSetID: nil),
+		.completed,
+		.markPendingButtonTapped,
+	),
+	(
+		storedTask(0, "Fix the bike", status: "deleted", workingSetID: nil),
+		.deleted,
+		.markPendingButtonTapped,
+	),
+]
 
 private let replicaDirectory = URL(filePath: "/Users/paul/.task", directoryHint: .isDirectory)
 
