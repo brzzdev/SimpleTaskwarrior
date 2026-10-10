@@ -172,9 +172,10 @@ final class InspectorController: NSViewController, NSMenuDelegate, NSTextFieldDe
 		}
 		let safeArea = view.safeAreaLayoutGuide
 		// Below the Replica's path where it can be, but pinned to the pane, not to the scrolling
-		// content: a long task form scrolls the path past the pane's bottom.
+		// content: a long task form scrolls the path past the pane's bottom. Below
+		// `windowSizeStayPut`, or a form taller than the pane makes the window taller to fit it.
 		let belowPath = noSelectionView.topAnchor.constraint(equalTo: pathSection.bottomAnchor)
-		belowPath.priority = .defaultHigh
+		belowPath.priority = .defaultLow
 		NSLayoutConstraint.activate([
 			belowPath,
 			content.leadingAnchor.constraint(equalTo: scrollView.contentView.leadingAnchor),
