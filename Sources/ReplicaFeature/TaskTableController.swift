@@ -231,8 +231,9 @@ final class TaskTableController: NSViewController, NSMenuDelegate, NSMenuItemVal
 		view.window?.makeFirstResponder(cell.textField)
 	}
 
-	/// Fits ID and Urgency to the widest value the rows show, or to their header where that's wider,
-	/// and moves the difference onto Description, so the columns still fill the table.
+	/// Fits ID and Urgency to the widest value the rows show, never narrower than the header their
+	/// minimum width holds, and moves the difference onto Description, so the columns still fill the
+	/// table.
 	private func fitColumnsToRows() {
 		let cell = TextCell()
 		var shownChange: CGFloat = 0
@@ -243,33 +244,25 @@ final class TaskTableController: NSViewController, NSMenuDelegate, NSMenuItemVal
 			else {
 				continue
 			}
-			let widestCell = Set(rows.map { text(column, of: $0) })
+			let texts = Set(rows.map { text(column, of: $0) })
+			let longest = texts.map(\.count).max()
+			// Both show digits of one width, so only the longest values can be the widest.
+			let widestCell = texts
+				.filter { $0.count == longest }
 				.map { text in
 					cell.configure(column, text: text)
 					return cell.fittingSize.width
 				}
 				.max()
-			let width = max(
-				headerWidth(of: tableColumn),
-				widestCell.map { $0 + table.intercellSpacing.width } ?? 0,
-			)
+			let oldWidth = tableColumn.width
+			// A cell sits the table's spacing narrower than its column.
+			tableColumn.width = widestCell.map { $0 + table.intercellSpacing.width } ?? 0
 			if !tableColumn.isHidden {
-				shownChange += width - tableColumn.width
+				shownChange += tableColumn.width - oldWidth
 			}
-			tableColumn.width = width
 		}
 		table.tableColumn(withIdentifier: NSUserInterfaceItemIdentifier(descriptionIdentifier))?
 			.width -= shownChange
-	}
-
-	/// The width of `tableColumn`'s whole title with room for the sort arrow, sorted or not.
-	private func headerWidth(of tableColumn: NSTableColumn) -> CGFloat {
-		// A sorted column's own header cell counts its arrow in its size, so measure one never sorted.
-		let header = NSTableHeaderCell(textCell: tableColumn.title)
-		// Any width does: the arrow sits a fixed distance from the header's trailing edge.
-		let bounds = NSRect(x: 0, y: 0, width: 100, height: 20)
-		let arrowWidth = bounds.maxX - header.sortIndicatorRect(forBounds: bounds).minX
-		return header.cellSize.width + arrowWidth
 	}
 
 	/// The task a table row shows, or nil for the new-task row.
@@ -286,10 +279,16 @@ final class TaskTableController: NSViewController, NSMenuDelegate, NSMenuItemVal
 	/// Keeps `tableColumn` wide enough for its whole title with the sort arrow, above `widestCell`.
 	/// Also the floor Description shrinks to as the window narrows, past which the table scrolls.
 	private func setMinimumWidth(of tableColumn: NSTableColumn, widestCell: NSView?) {
+		// A sorted column's own header cell counts its arrow in its size, so measure one never sorted.
+		let header = NSTableHeaderCell(textCell: tableColumn.title)
+		// Any width does: the arrow sits a fixed distance from the header's trailing edge.
+		let bounds = NSRect(x: 0, y: 0, width: 100, height: 20)
+		let arrowWidth = bounds.maxX - header.sortIndicatorRect(forBounds: bounds).minX
+		let headerWidth = header.cellSize.width + arrowWidth
 		// A cell sits the table's spacing narrower than its column.
 		let cellWidth = widestCell.map { $0.fittingSize.width + table.intercellSpacing.width } ?? 0
 		// The larger, not the sum, since the header sits above the cells rather than beside them.
-		tableColumn.minWidth = max(headerWidth(of: tableColumn), cellWidth)
+		tableColumn.minWidth = max(headerWidth, cellWidth)
 	}
 
 	/// Keeps a column per UDA the Taskrc defines, then names the table's autosave once the first
@@ -494,7 +493,10 @@ private func sampleCell(_ column: TaskColumn) -> NSView? {
 		return cell
 
 	// Fitted to the rows shown instead.
-	case .id, .project, .tags, .uda, .urgency:
+	case .id, .urgency:
+		return nil
+
+	case .project, .tags, .uda:
 		return nil
 	}
 }
