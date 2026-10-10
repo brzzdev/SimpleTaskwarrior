@@ -120,7 +120,13 @@ public final class ReplicaWindowController: NSWindowController, NSMenuItemValida
 				store.writeProgress == .saving
 					? String(localized: "Saving…")
 					: store.directory?.path(percentEncoded: false) ?? ""
-			window.title = store.directory?.lastPathComponent ?? ""
+		}
+		// Kept apart from the subtitle, which changes on every save, since naming asks the file system.
+		observe { [weak self] in
+			guard let self else {
+				return
+			}
+			self.window?.title = store.directory.map { replicaName(of: $0) } ?? ""
 		}
 		observe { [weak self] in
 			self?.updateCommandItems()
