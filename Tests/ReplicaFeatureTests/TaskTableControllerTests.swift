@@ -148,19 +148,6 @@ private func expectColumnsFill(
 	)
 }
 
-/// Waits for `condition`, such as the table following the store, which it does on a later turn of
-/// the run loop.
-@MainActor
-private func wait(
-	until condition: () -> Bool,
-	sourceLocation: SourceLocation = #_sourceLocation,
-) async throws {
-	for _ in 0 ..< 100 where !condition() {
-		try await Task.sleep(for: .milliseconds(10))
-	}
-	try #require(condition(), sourceLocation: sourceLocation)
-}
-
 private func identifier(_ column: TaskColumn) -> NSUserInterfaceItemIdentifier {
 	NSUserInterfaceItemIdentifier(column.identifier)
 }
