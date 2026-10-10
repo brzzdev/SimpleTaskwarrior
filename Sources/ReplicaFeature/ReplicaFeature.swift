@@ -43,8 +43,7 @@ struct ReplicaFeature {
 		var isTaskrcHintPresented = false
 		var isTaskrcPanelPresented = false
 		/// The tasks an inspector edit, of one task or several, may move out of the table, which the
-		/// table keeps
-		/// until the selection changes.
+		/// table keeps until the selection changes, or a Stop of them commits.
 		var keptTasks: Set<Models.Task.ID> = []
 		/// The tasks a Done or Delete in progress is writing, which the table drops as the write
 		/// starts rather than once it commits, since that can wait seconds on the Replica's lock.
@@ -70,6 +69,9 @@ struct ReplicaFeature {
 		var sidebarSelection: Set<SidebarItem> = []
 		/// The table's sort, which the table autosaves per Replica and reports once it restores.
 		var sortOrder = [TaskSort(.urgency, order: .reverse)]
+		/// The tasks a Stop in progress is writing, which the table lets go of once it commits, so
+		/// they leave Active even where an edit kept them.
+		var stoppingTasks: Set<Models.Task.ID> = []
 		/// Every task in the Replica as last read, which the blocked rule and Urgency read.
 		var storedTasks: [StoredTask] = []
 		var taskrc: TaskrcClient.Loaded?
@@ -860,10 +862,10 @@ struct ReplicaFeature {
 				}
 
 			case .writeCommitted:
-				// A closed task can't stay kept, or the table brings it back. An edit queued behind the
-				// chain repair prompt keeps the tasks it edits; a close that fails leaves them open, so
-				// kept.
-				state.keptTasks.subtract(state.leavingTasks)
+				// A closed task can't stay kept, or the table brings it back, nor can a stopped one, or
+				// Active does. An edit queued behind the chain repair prompt keeps the tasks it edits; a
+				// close or Stop that fails leaves them as they were, so kept.
+				state.keptTasks.subtract(state.leavingTasks.union(state.stoppingTasks))
 				selectCreatedTask(&state)
 				return finishWrite(&state)
 
@@ -1277,6 +1279,7 @@ struct ReplicaFeature {
 	private func finishWrite(_ state: inout State) -> Effect<Action> {
 		state.creatingTask = nil
 		state.leavingTasks = []
+		state.stoppingTasks = []
 		state.writeProgress = nil
 		// A failed Done or Delete puts its tasks back.
 		filterRows(&state)
@@ -1340,10 +1343,15 @@ struct ReplicaFeature {
 			return write(.markPending(ids), &state)
 
 		case .startStop:
-			// They show where Start or Stop leaves them, as in and out of Active, even where an edit
-			// kept them. One that fails to write stays as it was, so shows as it did.
-			state.keptTasks.subtract(ids)
-			return write(state.isStopping ? .stop(ids) : .start(ids), &state)
+			guard state.isStopping else {
+				return write(.start(ids), &state)
+			}
+			let effect = write(.stop(ids), &state)
+			// Only once the write has started, since only its end lets them go.
+			if state.writeProgress != nil {
+				state.stoppingTasks = Set(ids)
+			}
+			return effect
 		}
 	}
 
