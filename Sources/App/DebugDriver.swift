@@ -86,9 +86,9 @@ final class DebugDriver {
 
 	private let listener: NWListener
 	private let openWindow: (URL) async throws -> NSWindow?
-	/// Whether the app quits once the reply has gone out: quitting before it leaves the client with
+	/// Whether the app quits once the reply has gone out: quitting before then leaves the client with
 	/// no reply.
-	private var isQuitting = false
+	private var quitsAfterReply = false
 	private var windowObserver: (any NSObjectProtocol)?
 
 	init?(openWindow: @escaping (URL) async throws -> NSWindow?) {
@@ -261,7 +261,7 @@ final class DebugDriver {
 					connection.send(content: line, completion: .contentProcessed { _ in
 						MainActor.assumeIsolated {
 							connection.cancel()
-							if self.isQuitting {
+							if self.quitsAfterReply {
 								NSApp.terminate(nil)
 							}
 						}
@@ -372,7 +372,7 @@ final class DebugDriver {
 			return Reply(dump: Dump(window))
 
 		case .quit:
-			isQuitting = true
+			quitsAfterReply = true
 			return Reply()
 
 		case let .sheet(button):
@@ -414,7 +414,7 @@ final class DebugDriver {
 			throw Failure("\(item.title) acts on other apps; check it with driver.sh")
 		}
 		if action == #selector(NSApplication.terminate(_:)) {
-			isQuitting = true
+			quitsAfterReply = true
 			return
 		}
 		NSApp.sendAction(action, to: target, from: item)
