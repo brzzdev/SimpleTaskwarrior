@@ -231,6 +231,42 @@ final class TaskTableController: NSViewController, NSMenuDelegate, NSMenuItemVal
 		view.window?.makeFirstResponder(cell.textField)
 	}
 
+	/// Fits ID and Urgency to the widest value the rows show, never narrower than the header their
+	/// minimum width holds, and lets Description take up the difference, so the columns still fill
+	/// the table.
+	private func fitColumnsToRows() {
+		let cell = TextCell()
+		var changed = false
+		for column in [TaskColumn.id, .urgency] {
+			guard
+				let tableColumn = table
+					.tableColumn(withIdentifier: NSUserInterfaceItemIdentifier(column.identifier))
+			else {
+				continue
+			}
+			cell.configure(column, text: "")
+			let attributes: [NSAttributedString.Key: Any] = [.font: cell.textField?.font as Any]
+			// Ranked by the text alone, far cheaper than laying out a cell for every value.
+			let widest = Set(rows.map { text(column, of: $0) })
+				.map { ($0, NSAttributedString(string: $0, attributes: attributes).size().width) }
+				.max { $0.1 < $1.1 }?
+				.0
+			var width: CGFloat = 0
+			if let widest {
+				cell.configure(column, text: widest)
+				// A cell sits the table's spacing narrower than its column.
+				width = cell.fittingSize.width + table.intercellSpacing.width
+			}
+			let oldWidth = tableColumn.width
+			tableColumn.width = width
+			changed = changed || tableColumn.width != oldWidth
+		}
+		// Only where a width changed, so a Description resized by hand keeps its width otherwise.
+		if changed {
+			table.sizeToFit()
+		}
+	}
+
 	/// The task a table row shows, or nil for the new-task row.
 	private func row(at index: Int) -> TaskRow? {
 		let index = index - rowOffset
@@ -245,7 +281,8 @@ final class TaskTableController: NSViewController, NSMenuDelegate, NSMenuItemVal
 	/// Keeps `tableColumn` wide enough for its whole title with the sort arrow, above `widestCell`.
 	/// Also the floor Description shrinks to as the window narrows, past which the table scrolls.
 	private func setMinimumWidth(of tableColumn: NSTableColumn, widestCell: NSView?) {
-		let header = tableColumn.headerCell
+		// A sorted column's own header cell counts its arrow in its size, so measure one never sorted.
+		let header = NSTableHeaderCell(textCell: tableColumn.title)
 		// Any width does: the arrow sits a fixed distance from the header's trailing edge.
 		let bounds = NSRect(x: 0, y: 0, width: 100, height: 20)
 		let arrowWidth = bounds.maxX - header.sortIndicatorRect(forBounds: bounds).minX
@@ -321,6 +358,8 @@ final class TaskTableController: NSViewController, NSMenuDelegate, NSMenuItemVal
 			description.width -= 1
 		}
 		updateVisibility()
+		// The saved widths of the columns fitted to the rows are stale.
+		fitColumnsToRows()
 		// The table fits its columns to its width only when that width changes. Without this, the
 		// defaults, or a layout saved in a wider window, would start wider than the table. A layout
 		// that already fits comes through unchanged.
@@ -366,6 +405,7 @@ final class TaskTableController: NSViewController, NSMenuDelegate, NSMenuItemVal
 			} else {
 				table.reloadData()
 			}
+			fitColumnsToRows()
 		}
 		let selection = IndexSet(store.selection
 			.compactMap { rows.index(id: $0).map { $0 + rowOffset } })
@@ -422,9 +462,19 @@ private func makeColumn(
 	title: String,
 ) -> NSTableColumn {
 	let tableColumn = NSTableColumn(identifier: NSUserInterfaceItemIdentifier(column.identifier))
+	switch column {
 	// Every other column keeps its width until it's resized by hand.
-	tableColumn.resizingMask =
-		column == .description ? [.autoresizingMask, .userResizingMask] : .userResizingMask
+	case .age, .due, .project, .scheduled, .tags, .uda, .until, .wait:
+		tableColumn.resizingMask = .userResizingMask
+
+	case .description:
+		tableColumn.resizingMask = [.autoresizingMask, .userResizingMask]
+
+	// Always fitted to the rows shown, which is the narrowest that shows every value, so resizing
+	// either by hand could only truncate it or take width from Description.
+	case .id, .urgency:
+		tableColumn.resizingMask = []
+	}
 	tableColumn.sortDescriptorPrototype = TaskSort(column, order: firstOrder).descriptor
 	tableColumn.title = title
 	return tableColumn
@@ -434,7 +484,7 @@ private func makeColumn(
 @MainActor
 private func sampleCell(_ column: TaskColumn) -> NSView? {
 	switch column {
-	case .age, .due, .id, .scheduled, .until, .urgency, .wait:
+	case .age, .due, .scheduled, .until, .wait:
 		let cell = TextCell()
 		cell.configure(column, of: sampleRow)
 		return cell
@@ -444,7 +494,8 @@ private func sampleCell(_ column: TaskColumn) -> NSView? {
 		cell.configure(sampleRow)
 		return cell
 
-	case .project, .tags, .uda:
+	// ID and Urgency are fitted to the rows shown instead.
+	case .id, .project, .tags, .uda, .urgency:
 		return nil
 	}
 }
@@ -454,8 +505,7 @@ private func sampleCell(_ column: TaskColumn) -> NSView? {
 private let sampleRow: TaskRow = {
 	// 28 December 2026, whose day and month take two digits in every zone and numeric date style.
 	let date = Date(timeIntervalSince1970: 1_798_459_200)
-	// Three digits, as a working set of up to 999 pending tasks shows.
-	var task = Models.Task(description: "Buy milk", id: UUID(), status: .pending, workingSetID: 999)
+	var task = Models.Task(description: "Buy milk", id: UUID(), status: .pending, workingSetID: nil)
 	task.annotations = Array(
 		repeating: Models.Task.Annotation(description: "", entry: date),
 		count: 10,
@@ -468,9 +518,8 @@ private let sampleRow: TaskRow = {
 	task.start = date
 	task.until = date
 	task.wait = date
-	// Two whole digits and a sign, wider than all but the rarest Urgency. Never nil, since only a
-	// Recurrence template is in no fixed view.
-	return TaskRow(isBlocked: true, task: task, udaColumns: [], urgency: -99.9, at: .now)!
+	// Never nil, since only a Recurrence template is in no fixed view.
+	return TaskRow(isBlocked: true, task: task, udaColumns: [], urgency: 0, at: .now)!
 }()
 
 /// What a plain text cell shows for `column`.
@@ -558,12 +607,16 @@ private final class TextCell: NSTableCellView {
 	}
 
 	func configure(_ column: TaskColumn, of row: TaskRow) {
+		configure(column, text: text(column, of: row))
+	}
+
+	func configure(_ column: TaskColumn, text: String) {
 		textField?.alignment = column == .urgency ? .right : .natural
 		textField?.font =
 			column == .id || column == .urgency
 				? .monospacedDigitSystemFont(ofSize: NSFont.systemFontSize, weight: .regular)
 				: .systemFont(ofSize: NSFont.systemFontSize)
-		textField?.stringValue = text(column, of: row)
+		textField?.stringValue = text
 	}
 }
 
