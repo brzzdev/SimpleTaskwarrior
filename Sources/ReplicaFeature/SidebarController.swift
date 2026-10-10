@@ -4,9 +4,11 @@ import ComposableArchitecture
 import SwiftNavigation
 import Taskrc
 
-/// A source list of the store's sidebar, which sends back its selection, and a footer naming the
-/// active Context.
-final class SidebarController: NSViewController, NSOutlineViewDataSource, NSOutlineViewDelegate {
+/// A source list of the store's sidebar, which sends back its selection and the tags it hides, and
+/// a footer naming the active Context.
+final class SidebarController: NSViewController, NSMenuDelegate, NSOutlineViewDataSource,
+	NSOutlineViewDelegate
+{
 	private let contextFooter = NSStackView()
 	private let contextLabel = truncatingLabel()
 	/// Kept here, since a reload makes new nodes and forgets which were expanded.
@@ -14,7 +16,7 @@ final class SidebarController: NSViewController, NSOutlineViewDataSource, NSOutl
 	/// Set while the outline follows the store, so the changes it makes aren't sent back.
 	private var isFollowingStore = false
 	private var nodes: [SidebarNode] = []
-	private let outline = NSOutlineView()
+	private let outline = SidebarOutlineView()
 	private var sidebar: Sidebar?
 	private let store: StoreOf<ReplicaFeature>
 
@@ -72,6 +74,11 @@ final class SidebarController: NSViewController, NSOutlineViewDataSource, NSOutl
 		outline.style = .sourceList
 		outline.dataSource = self
 		outline.delegate = self
+		outline.menu = NSMenu()
+		outline.menu?.delegate = self
+		outline.tagOptionClicked = { [weak self] tag in
+			self?.store.send(.hiddenTagToggled(tag))
+		}
 
 		observe { [weak self] in
 			self?.updateOutline()
@@ -110,6 +117,35 @@ final class SidebarController: NSViewController, NSOutlineViewDataSource, NSOutl
 		popover.show(relativeTo: sender.bounds, of: sender, preferredEdge: .minY)
 	}
 
+	@objc
+	func hiddenTagMenuItemChosen(_ sender: NSMenuItem) {
+		guard let tag = sender.representedObject as? String else {
+			return
+		}
+		store.send(.hiddenTagToggled(tag))
+	}
+
+	/// Offers to hide or show a right-clicked tag, and nothing for any other row.
+	func menuNeedsUpdate(_ menu: NSMenu) {
+		menu.removeAllItems()
+		guard
+			let node = outline.item(atRow: outline.clickedRow) as? SidebarNode,
+			case let .tag(tag)? = node.item
+		else {
+			return
+		}
+		let item = NSMenuItem(
+			title: node.isHidden
+				? String(localized: "Show Tasks Tagged “\(tag)”")
+				: String(localized: "Hide Tasks Tagged “\(tag)”"),
+			action: #selector(hiddenTagMenuItemChosen(_:)),
+			keyEquivalent: "",
+		)
+		item.representedObject = tag
+		item.target = self
+		menu.addItem(item)
+	}
+
 	func outlineView(_: NSOutlineView, child index: Int, ofItem item: Any?) -> Any {
 		children(of: item)[index]
 	}
@@ -126,8 +162,19 @@ final class SidebarController: NSViewController, NSOutlineViewDataSource, NSOutl
 		children(of: item).count
 	}
 
-	func outlineView(_: NSOutlineView, shouldSelectItem item: Any) -> Bool {
-		(item as? SidebarNode)?.item != nil
+	/// Leaves out the section headers and hidden tags, and leaves the selection as it was where
+	/// that's all a click proposed.
+	func outlineView(
+		_: NSOutlineView,
+		selectionIndexesForProposedSelection proposed: IndexSet,
+	) -> IndexSet {
+		let selectable = proposed.filteredIndexSet { row in
+			guard let node = outline.item(atRow: row) as? SidebarNode else {
+				return false
+			}
+			return node.item != nil && !node.isHidden
+		}
+		return selectable.isEmpty && !proposed.isEmpty ? outline.selectedRowIndexes : selectable
 	}
 
 	func outlineView(_: NSOutlineView, viewFor _: NSTableColumn?, item: Any) -> NSView? {
@@ -140,7 +187,7 @@ final class SidebarController: NSViewController, NSOutlineViewDataSource, NSOutl
 			return cell
 		}
 		let cell = outline.reusedCell(ItemCell.init)
-		cell.configure(item, count: node.count)
+		cell.configure(item, count: node.count, isHidden: node.isHidden)
 		return cell
 	}
 
@@ -227,6 +274,8 @@ private final class SidebarNode {
 	let children: [SidebarNode]
 	/// 0 for a section header, which shows none.
 	let count: Int
+	/// A hidden tag, which can't be selected.
+	let isHidden: Bool
 	let item: SidebarItem?
 	let title: String
 
@@ -234,13 +283,15 @@ private final class SidebarNode {
 	init(title: String, children: [SidebarNode]) {
 		self.children = children
 		count = 0
+		isHidden = false
 		item = nil
 		self.title = title
 	}
 
-	init(_ item: SidebarItem, count: Int, children: [SidebarNode] = []) {
+	init(_ item: SidebarItem, count: Int, children: [SidebarNode] = [], isHidden: Bool = false) {
 		self.children = children
 		self.count = count
+		self.isHidden = isHidden
 		self.item = item
 		title = item.title
 	}
@@ -257,7 +308,15 @@ private final class SidebarNode {
 			sections.append(
 				SidebarNode(
 					title: String(localized: "Tags"),
-					children: sidebar.tags.map { SidebarNode($0.item, count: $0.count) },
+					children: sidebar.tags.map { tag in
+						let isHidden =
+							if case let .tag(name) = tag.item {
+								sidebar.hiddenTags.contains(name)
+							} else {
+								false
+							}
+						return SidebarNode(tag.item, count: tag.count, isHidden: isHidden)
+					},
 				),
 			)
 		}
@@ -354,7 +413,8 @@ private final class ItemCell: NSTableCellView {
 		fatalError("init(coder:) has not been implemented")
 	}
 
-	func configure(_ item: SidebarItem, count: Int) {
+	/// A hidden tag reads struck through and dimmed, with a slashed symbol.
+	func configure(_ item: SidebarItem, count: Int, isHidden: Bool) {
 		countLabel.stringValue = String(count)
 		// A fixed view's count reads brighter than a project's or tag's.
 		if case .view = item {
@@ -362,8 +422,28 @@ private final class ItemCell: NSTableCellView {
 		} else {
 			countLabel.textColor = .tertiaryLabelColor
 		}
-		imageView?.image = NSImage(systemSymbolName: item.symbolName, accessibilityDescription: nil)
-		textField?.stringValue = item.title
+		imageView?.image = NSImage(
+			systemSymbolName: isHidden ? "tag.slash" : item.symbolName,
+			accessibilityDescription: nil,
+		)
+		imageView?.contentTintColor = isHidden ? .secondaryLabelColor : nil
+		guard let textField else {
+			return
+		}
+		textField.stringValue = item.title
+		guard isHidden else {
+			return
+		}
+		// Over the label's own attributes, which carry its font and truncation.
+		let title = NSMutableAttributedString(attributedString: textField.attributedStringValue)
+		title.addAttributes(
+			[
+				.foregroundColor: NSColor.secondaryLabelColor,
+				.strikethroughStyle: NSUnderlineStyle.single.rawValue,
+			],
+			range: NSRange(location: 0, length: title.length),
+		)
+		textField.attributedStringValue = title
 	}
 }
 
@@ -386,3 +466,20 @@ private let contextPopoverWidth: CGFloat = 260
 private let outlineItemKey = "NSObject"
 
 private let symbolWidth: CGFloat = 20
+
+/// An outline that hands an ⌥-click on a tag to `tagOptionClicked` in place of selecting it.
+private final class SidebarOutlineView: NSOutlineView {
+	var tagOptionClicked: (String) -> Void = { _ in }
+
+	override func mouseDown(with event: NSEvent) {
+		let row = row(at: convert(event.locationInWindow, from: nil))
+		guard
+			event.modifierFlags.contains(.option),
+			case let .tag(tag)? = (item(atRow: row) as? SidebarNode)?.item
+		else {
+			super.mouseDown(with: event)
+			return
+		}
+		tagOptionClicked(tag)
+	}
+}

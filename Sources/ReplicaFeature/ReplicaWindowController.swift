@@ -216,6 +216,13 @@ public final class ReplicaWindowController: NSWindowController, NSMenuItemValida
 		]
 	}
 
+	/// View › Hidden Tags, whose items hide or show again a tag's tasks. They have no key
+	/// equivalents,
+	/// since the tags change with the Replica.
+	public static func hiddenTagsMenuItem() -> NSMenuItem {
+		submenuItem(String(localized: "Hidden Tags"), delegate: hiddenTagsMenuDelegate)
+	}
+
 	/// Opens the menu of tasks the inspected task can come to depend on.
 	@objc
 	public func addDependency(_: Any?) {
@@ -388,6 +395,15 @@ public final class ReplicaWindowController: NSWindowController, NSMenuItemValida
 		store.send(.startStopButtonTapped)
 	}
 
+	/// Hides, or shows again, the tasks with the tag a Hidden Tags item names.
+	@objc
+	public func toggleHiddenTag(_ sender: Any?) {
+		guard let tag = (sender as? NSMenuItem)?.representedObject as? String else {
+			return
+		}
+		store.send(.hiddenTagToggled(tag))
+	}
+
 	public func toolbar(
 		_: NSToolbar,
 		itemForItemIdentifier identifier: NSToolbarItem.Identifier,
@@ -465,6 +481,12 @@ public final class ReplicaWindowController: NSWindowController, NSMenuItemValida
 
 		case #selector(selectPreviousTask(_:)):
 			store.state.adjacentTask(-1) != nil
+
+		case #selector(toggleHiddenTag(_:)):
+			validate(
+				menuItem,
+				isOn: (menuItem.representedObject as? String).map(store.hiddenTags.contains) == true,
+			)
 
 		case #selector(undo(_:)):
 			validate(
@@ -727,6 +749,12 @@ public final class ReplicaWindowController: NSWindowController, NSMenuItemValida
 		return isEnabled
 	}
 
+	/// Checks `menuItem` where `isOn`, and enables it.
+	private func validate(_ menuItem: NSMenuItem, isOn: Bool) -> Bool {
+		menuItem.state = isOn ? .on : .off
+		return true
+	}
+
 	/// Whether a task command's menu item is enabled, titling Start/Stop for what it will do.
 	private func validate(_ menuItem: NSMenuItem, for command: ReplicaFeature.TaskCommand) -> Bool {
 		if command == .startStop {
@@ -741,12 +769,12 @@ public final class ReplicaWindowController: NSWindowController, NSMenuItemValida
 	}
 }
 
-/// Lists, as a Remove menu opens, what the window its items go to can remove, each item sending
+/// Lists, as a submenu opens, the values the window its items go to offers, each item sending
 /// `action` with the value it names.
 @MainActor
-private final class RemoveMenuDelegate: NSObject, NSMenuDelegate {
+private final class ValueMenuDelegate: NSObject, NSMenuDelegate {
 	private let action: Selector
-	/// The item shown when there's nothing to remove.
+	/// The item shown when there's nothing to list.
 	private let emptyTitle: String
 	private let items: @MainActor (ReplicaWindowController) -> [(title: String, value: Any)]
 
@@ -776,8 +804,22 @@ private final class RemoveMenuDelegate: NSObject, NSMenuDelegate {
 	}
 }
 
+/// Shared by every Hidden Tags menu, since a menu holds its delegate weakly. It lists the tags in
+/// the sidebar's order.
+@MainActor private let hiddenTagsMenuDelegate = ValueMenuDelegate(
+	action: #selector(ReplicaWindowController.toggleHiddenTag(_:)),
+	emptyTitle: String(localized: "No Tags"),
+) { controller in
+	controller.store.sidebar.tags.compactMap { count in
+		guard case let .tag(tag) = count.item else {
+			return nil
+		}
+		return (tag, tag)
+	}
+}
+
 /// Shared by every Remove Annotation menu, since a menu holds its delegate weakly.
-@MainActor private let removeAnnotationMenuDelegate = RemoveMenuDelegate(
+@MainActor private let removeAnnotationMenuDelegate = ValueMenuDelegate(
 	action: #selector(ReplicaWindowController.removeAnnotation(_:)),
 	emptyTitle: String(localized: "No Annotations"),
 ) { controller in
@@ -785,7 +827,7 @@ private final class RemoveMenuDelegate: NSObject, NSMenuDelegate {
 }
 
 /// Shared by every Remove Dependency menu, since a menu holds its delegate weakly.
-@MainActor private let removeDependencyMenuDelegate = RemoveMenuDelegate(
+@MainActor private let removeDependencyMenuDelegate = ValueMenuDelegate(
 	action: #selector(ReplicaWindowController.removeDependency(_:)),
 	emptyTitle: String(localized: "No Dependencies"),
 ) { controller in
@@ -797,7 +839,7 @@ private final class RemoveMenuDelegate: NSObject, NSMenuDelegate {
 }
 
 /// Shared by every Remove Tag menu, since a menu holds its delegate weakly.
-@MainActor private let removeTagMenuDelegate = RemoveMenuDelegate(
+@MainActor private let removeTagMenuDelegate = ValueMenuDelegate(
 	action: #selector(ReplicaWindowController.removeTag(_:)),
 	emptyTitle: String(localized: "No Tags"),
 ) { controller in
