@@ -13,7 +13,6 @@ let fileAccessReason =
 
 let baseSettings: SettingsDictionary = [
 	"ASSETCATALOG_COMPILER_APPICON_NAME": "AppIcon",
-	"ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS": "YES",
 	// Development defaults, with `MARKETING_VERSION`: `just archive` stamps the build number, and
 	// `just publish` the version from the release's tag.
 	"CURRENT_PROJECT_VERSION": "0",
@@ -46,8 +45,10 @@ if !developmentTeam.isEmpty {
 }
 
 // The Debug build runs alongside the installed release as an app of its own, keeping its own state.
-// The app menu shows the process name, so the product is renamed too.
+// The app menu shows the process name, so the product is renamed too, and its own icon tells the
+// two apart in the Dock.
 let debugSettings: SettingsDictionary = [
+	"ASSETCATALOG_COMPILER_APPICON_NAME": "AppIconDebug",
 	"PRODUCT_BUNDLE_IDENTIFIER": "dev.brzz.SimpleTaskwarrior.debug",
 	"PRODUCT_NAME": "SimpleTaskwarrior Debug",
 ]
@@ -102,7 +103,7 @@ let project = Project(
 			// the icon, failing actool. Globbing collapses the contents back
 			// into the opaque bundle, consulting no UTI database (needs
 			// Tuist >= 4.58).
-			resources: ["AppHost/AppIcon.icon/**"],
+			resources: ["AppHost/AppIcon.icon/**", "AppHost/AppIconDebug.icon/**"],
 			scripts: [
 				.pre(
 					script: """
