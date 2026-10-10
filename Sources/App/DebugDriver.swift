@@ -86,6 +86,9 @@ final class DebugDriver {
 
 	private let listener: NWListener
 	private let openWindow: (URL) async throws -> NSWindow?
+	/// Whether the app quits once the reply has gone out: quitting before it leaves the client with
+	/// no reply.
+	private var isQuitting = false
 	private var windowObserver: (any NSObjectProtocol)?
 
 	init?(openWindow: @escaping (URL) async throws -> NSWindow?) {
@@ -256,7 +259,12 @@ final class DebugDriver {
 					var line = (try? JSONEncoder().encode(reply)) ?? Data()
 					line.append(UInt8(ascii: "\n"))
 					connection.send(content: line, completion: .contentProcessed { _ in
-						connection.cancel()
+						MainActor.assumeIsolated {
+							connection.cancel()
+							if self.isQuitting {
+								NSApp.terminate(nil)
+							}
+						}
 					})
 				}
 			}
@@ -364,10 +372,7 @@ final class DebugDriver {
 			return Reply(dump: Dump(window))
 
 		case .quit:
-			// After the reply goes out.
-			Task {
-				NSApp.terminate(nil)
-			}
+			isQuitting = true
 			return Reply()
 
 		case let .sheet(button):
@@ -403,10 +408,14 @@ final class DebugDriver {
 	}
 
 	/// Sends `action` to `target`, unless it acts on other apps: no window of this one can hide
-	/// that.
+	/// that. Quit waits for the reply to go out.
 	private func send(_ action: Selector, to target: AnyObject, from item: NSMenuItem) throws {
 		guard !Self.otherAppActions.contains(action) else {
 			throw Failure("\(item.title) acts on other apps; check it with driver.sh")
+		}
+		if action == #selector(NSApplication.terminate(_:)) {
+			isQuitting = true
+			return
 		}
 		NSApp.sendAction(action, to: target, from: item)
 	}
