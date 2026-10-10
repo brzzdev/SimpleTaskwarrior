@@ -63,6 +63,10 @@ final class DebugDriver {
 	/// is at the Mac.
 	static let socketPath = ProcessInfo.processInfo.environment["STW_DRIVER_SOCKET"]
 
+	/// Actions that bring another app forward, over whatever the person at the Mac is doing.
+	private static let foregroundingActions: Set<Selector> = [
+		#selector(ReplicaWindowController.revealInFinder(_:)),
+	]
 	/// The key codes of the keys whose characters say nothing of the key: AppKit reads the code for
 	/// these. Every other key is sent with code 0.
 	private static let keyCodes: [String: UInt16] = [
@@ -132,16 +136,47 @@ final class DebugDriver {
 
 	/// Sends a key to `window`. A menu's key equivalent resolves its target as choosing the item
 	/// does, so it's performed the same way.
+	/// The target `item`'s action goes to, found from `window` as AppKit would were it key: from the
+	/// view a context menu belongs to, or else the first responder. Nil when nothing handles the
+	/// action or the target disables the item, which AppKit treats alike.
+	private func enabledTarget(
+		for item: NSMenuItem,
+		in window: NSWindow,
+		from view: NSView? = nil,
+	) -> AnyObject? {
+		guard let action = item.action else {
+			return nil
+		}
+		let chain = sequence(first: view ?? window.firstResponder, next: { $0?.nextResponder })
+			.compactMap { $0 as AnyObject? }
+		let candidates = chain + [window.windowController, window.delegate, NSApp, NSApp.delegate]
+			.compactMap { $0 as AnyObject? }
+		guard let target = item.target ?? candidates.first(where: { $0.responds(to: action) }) else {
+			return nil
+		}
+		let isEnabled = (target as? any NSMenuItemValidation)?.validateMenuItem(item)
+			?? (target as? any NSUserInterfaceValidations)?.validateUserInterfaceItem(item)
+			?? true
+		return isEnabled ? target : nil
+	}
+
 	private func key(_ characters: String, _ modifiers: [Modifier], in window: NSWindow) throws {
 		let flags = NSEvent.ModifierFlags(modifiers.map(\.flag))
+		// The Delete key types U+007F, which a menu names as backspace, U+0008.
+		func typed(_ key: String) -> String {
+			key == "\u{8}" ? "\u{7F}" : key
+		}
+		let characters = typed(characters)
 		// An uppercase key equivalent implies Shift.
 		let item = menuItems(in: NSApp.mainMenu).first { item in
 			let isShifted = item.keyEquivalent != item.keyEquivalent.lowercased()
-			return item.keyEquivalent.lowercased() == characters.lowercased()
+			return typed(item.keyEquivalent).lowercased() == characters.lowercased()
 				&& item.keyEquivalentModifierMask.union(isShifted ? .shift : []) == flags
 		}
-		if let item {
-			try perform(item, in: window)
+		// A disabled key equivalent goes on to the first responder, as AppKit sends it: ⌘⌫ deletes
+		// text in a field being edited, where it isn't the task Delete.
+		if let item, let target = enabledTarget(for: item, in: window) {
+			try send(item, to: target)
 			return
 		}
 		guard
@@ -189,34 +224,16 @@ final class DebugDriver {
 		return Reply(dump: Dump(window))
 	}
 
-	/// Validates and performs `item`, as choosing it from the menu would, finding its target from
-	/// `window` as AppKit would were it key: from the view a context menu belongs to, or else the
-	/// first responder.
+	/// Validates and performs `item`, as choosing it from the menu would.
 	private func perform(
 		_ item: NSMenuItem,
 		in window: NSWindow,
 		from view: NSView? = nil,
 	) throws {
-		let title = item.title
-		guard let action = item.action else {
-			throw Failure("\(title) has no action")
+		guard let target = enabledTarget(for: item, in: window, from: view) else {
+			throw Failure("\(item.title) is disabled")
 		}
-		let chain = sequence(first: view ?? window.firstResponder, next: { $0?.nextResponder })
-			.compactMap { $0 as AnyObject? }
-		let candidates = chain + [window.windowController, window.delegate, NSApp, NSApp.delegate]
-			.compactMap { $0 as AnyObject? }
-		guard
-			let target = item.target ?? candidates.first(where: { $0.responds(to: action) })
-		else {
-			throw Failure("nothing handles \(title)")
-		}
-		let isEnabled = (target as? any NSMenuItemValidation)?.validateMenuItem(item)
-			?? (target as? any NSUserInterfaceValidations)?.validateUserInterfaceItem(item)
-			?? true
-		guard isEnabled else {
-			throw Failure("\(title) is disabled")
-		}
-		NSApp.sendAction(action, to: target, from: item)
+		try send(item, to: target)
 	}
 
 	private func receive(on connection: NWConnection, buffer: Data) {
@@ -380,6 +397,18 @@ final class DebugDriver {
 				client.insertText(text, replacementRange: NSRange(location: NSNotFound, length: 0))
 			}
 		}
+	}
+
+	/// Sends `item`'s action to `target`, unless it would bring another app forward: no window of
+	/// this one can hide that.
+	private func send(_ item: NSMenuItem, to target: AnyObject) throws {
+		guard let action = item.action else {
+			return
+		}
+		guard !Self.foregroundingActions.contains(action) else {
+			throw Failure("\(item.title) brings another app forward; check it with driver.sh")
+		}
+		NSApp.sendAction(action, to: target, from: item)
 	}
 
 	private func table(in window: NSWindow) throws -> NSTableView {
