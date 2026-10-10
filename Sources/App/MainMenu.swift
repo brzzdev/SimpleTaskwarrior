@@ -116,10 +116,11 @@ func mainMenu(
 	// The split view controller retitles these Show or Hide as the panes change.
 	let view = NSMenu(title: "View")
 	view.items = [
-		menuItem("Pending", #selector(ReplicaWindowController.showPending(_:)), key: "1"),
-		menuItem("Waiting", #selector(ReplicaWindowController.showWaiting(_:)), key: "2"),
-		menuItem("Completed", #selector(ReplicaWindowController.showCompleted(_:)), key: "3"),
-		menuItem("Deleted", #selector(ReplicaWindowController.showDeleted(_:)), key: "4"),
+		menuItem("Active", #selector(ReplicaWindowController.showActive(_:)), key: "1"),
+		menuItem("Pending", #selector(ReplicaWindowController.showPending(_:)), key: "2"),
+		menuItem("Waiting", #selector(ReplicaWindowController.showWaiting(_:)), key: "3"),
+		menuItem("Completed", #selector(ReplicaWindowController.showCompleted(_:)), key: "4"),
+		menuItem("Deleted", #selector(ReplicaWindowController.showDeleted(_:)), key: "5"),
 		.separator(),
 		menuItem(
 			"Show Sidebar",
