@@ -232,11 +232,11 @@ final class TaskTableController: NSViewController, NSMenuDelegate, NSMenuItemVal
 	}
 
 	/// Fits ID and Urgency to the widest value the rows show, never narrower than the header their
-	/// minimum width holds, and moves the difference onto Description, so the columns still fill the
-	/// table.
+	/// minimum width holds, and lets Description take up the difference, so the columns still fill
+	/// the table.
 	private func fitColumnsToRows() {
 		let cell = TextCell()
-		var shownChange: CGFloat = 0
+		var changed = false
 		for column in [TaskColumn.id, .urgency] {
 			guard
 				let tableColumn = table
@@ -244,25 +244,27 @@ final class TaskTableController: NSViewController, NSMenuDelegate, NSMenuItemVal
 			else {
 				continue
 			}
-			let texts = Set(rows.map { text(column, of: $0) })
-			let longest = texts.map(\.count).max()
-			// Both show digits of one width, so only the longest values can be the widest.
-			let widestCell = texts
-				.filter { $0.count == longest }
-				.map { text in
-					cell.configure(column, text: text)
-					return cell.fittingSize.width
-				}
-				.max()
-			let oldWidth = tableColumn.width
-			// A cell sits the table's spacing narrower than its column.
-			tableColumn.width = widestCell.map { $0 + table.intercellSpacing.width } ?? 0
-			if !tableColumn.isHidden {
-				shownChange += tableColumn.width - oldWidth
+			cell.configure(column, text: "")
+			let attributes: [NSAttributedString.Key: Any] = [.font: cell.textField?.font as Any]
+			// Ranked by the text alone, far cheaper than laying out a cell for every value.
+			let widest = Set(rows.map { text(column, of: $0) })
+				.map { ($0, NSAttributedString(string: $0, attributes: attributes).size().width) }
+				.max { $0.1 < $1.1 }?
+				.0
+			var width: CGFloat = 0
+			if let widest {
+				cell.configure(column, text: widest)
+				// A cell sits the table's spacing narrower than its column.
+				width = cell.fittingSize.width + table.intercellSpacing.width
 			}
+			let oldWidth = tableColumn.width
+			tableColumn.width = width
+			changed = changed || tableColumn.width != oldWidth
 		}
-		table.tableColumn(withIdentifier: NSUserInterfaceItemIdentifier(descriptionIdentifier))?
-			.width -= shownChange
+		// Only where a width changed, so a Description resized by hand keeps its width otherwise.
+		if changed {
+			table.sizeToFit()
+		}
 	}
 
 	/// The task a table row shows, or nil for the new-task row.
@@ -461,6 +463,10 @@ private func makeColumn(
 ) -> NSTableColumn {
 	let tableColumn = NSTableColumn(identifier: NSUserInterfaceItemIdentifier(column.identifier))
 	switch column {
+	// Every other column keeps its width until it's resized by hand.
+	case .age, .due, .project, .scheduled, .tags, .uda, .until, .wait:
+		tableColumn.resizingMask = .userResizingMask
+
 	case .description:
 		tableColumn.resizingMask = [.autoresizingMask, .userResizingMask]
 
@@ -468,10 +474,6 @@ private func makeColumn(
 	// either by hand could only truncate it or take width from Description.
 	case .id, .urgency:
 		tableColumn.resizingMask = []
-
-	// Every other column keeps its width until it's resized by hand.
-	case .age, .due, .project, .scheduled, .tags, .uda, .until, .wait:
-		tableColumn.resizingMask = .userResizingMask
 	}
 	tableColumn.sortDescriptorPrototype = TaskSort(column, order: firstOrder).descriptor
 	tableColumn.title = title
@@ -492,11 +494,8 @@ private func sampleCell(_ column: TaskColumn) -> NSView? {
 		cell.configure(sampleRow)
 		return cell
 
-	// Fitted to the rows shown instead.
-	case .id, .urgency:
-		return nil
-
-	case .project, .tags, .uda:
+	// ID and Urgency are fitted to the rows shown instead.
+	case .id, .project, .tags, .uda, .urgency:
 		return nil
 	}
 }

@@ -45,14 +45,34 @@ struct TaskTableControllerTests {
 		expectColumnsFill(table)
 
 		table.sortDescriptors = [TaskSort(.id, order: .reverse).descriptor]
-		try await follow(store, table: table)
+		try await wait {
+			let cell = table.view(
+				atColumn: table.column(withIdentifier: identifier(.id)),
+				row: 0,
+				makeIfNecessary: true,
+			)
+			return (cell as? NSTableCellView)?.textField?.stringValue == "12345"
+		}
 		#expect(id.width == wideWidths.id)
 		#expect(urgency.width == wideWidths.urgency)
 
 		store.send(.binding(.set(\.searchText, "Task")))
-		try await follow(store, table: table)
+		try await wait { table.numberOfRows == narrow.count }
 		#expect(id.width == narrowIDWidth)
 		#expect(urgency.width == headerWidths.urgency)
+		expectColumnsFill(table)
+
+		// With Description at its minimum, the wide row's width overflows the table, and must stop
+		// once it's filtered away.
+		let description = try #require(table.tableColumn(withIdentifier: identifier(.description)))
+		let narrowedWidth = window.contentLayoutRect.width - (description.width - description.minWidth)
+		window.setContentSize(NSSize(width: narrowedWidth, height: 400))
+		window.layoutIfNeeded()
+		expectColumnsFill(table)
+		store.send(.binding(.set(\.searchText, "")))
+		try await wait { table.numberOfRows == narrow.count + 1 }
+		store.send(.binding(.set(\.searchText, "Task")))
+		try await wait { table.numberOfRows == narrow.count }
 		expectColumnsFill(table)
 	}
 
@@ -128,17 +148,17 @@ private func expectColumnsFill(
 	)
 }
 
-/// Waits for the table to follow the store, which it does on a later turn of the run loop.
+/// Waits for `condition`, such as the table following the store, which it does on a later turn of
+/// the run loop.
 @MainActor
-private func follow(_ store: StoreOf<ReplicaFeature>, table: NSTableView) async throws {
-	// The rows can change without their count changing, so this always waits out a turn.
-	for _ in 0 ..< 100 {
+private func wait(
+	until condition: () -> Bool,
+	sourceLocation: SourceLocation = #_sourceLocation,
+) async throws {
+	for _ in 0 ..< 100 where !condition() {
 		try await Task.sleep(for: .milliseconds(10))
-		if table.numberOfRows == store.rows.count {
-			break
-		}
 	}
-	try #require(table.numberOfRows == store.rows.count)
+	try #require(condition(), sourceLocation: sourceLocation)
 }
 
 private func identifier(_ column: TaskColumn) -> NSUserInterfaceItemIdentifier {
@@ -152,7 +172,7 @@ private func loadTasks(
 	table: NSTableView,
 ) async throws {
 	store.send(.tasksLoaded(TaskSnapshot(readIndex: store.readIndex + 1, tasks: tasks)))
-	try await follow(store, table: table)
+	try await wait { table.numberOfRows == tasks.count }
 }
 
 private func removeAutosave(_ autosaveName: String) {
