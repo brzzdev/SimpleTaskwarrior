@@ -278,6 +278,7 @@ extension SidebarItem {
 		switch self {
 		case .project: "folder"
 		case .tag: "tag"
+		case .view(.active): "play.circle"
 		case .view(.completed): "checkmark.circle"
 		case .view(.deleted): "trash"
 		case .view(.pending): "tray"
@@ -290,6 +291,7 @@ extension SidebarItem {
 		switch self {
 		case let .project(name): name.components(separatedBy: ".").last ?? name
 		case let .tag(tag): tag
+		case .view(.active): String(localized: "Active")
 		case .view(.completed): String(localized: "Completed")
 		case .view(.deleted): String(localized: "Deleted")
 		case .view(.pending): String(localized: "Pending")

@@ -468,8 +468,9 @@ private let sampleRow: TaskRow = {
 	task.start = date
 	task.until = date
 	task.wait = date
-	// Two whole digits and a sign, wider than all but the rarest Urgency.
-	return TaskRow(isBlocked: true, task: task, udaColumns: [], urgency: -99.9, view: .pending)
+	// Two whole digits and a sign, wider than all but the rarest Urgency. Never nil, since only a
+	// Recurrence template is in no fixed view.
+	return TaskRow(isBlocked: true, task: task, udaColumns: [], urgency: -99.9, at: .now)!
 }()
 
 /// What a plain text cell shows for `column`.

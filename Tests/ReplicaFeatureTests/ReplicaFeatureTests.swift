@@ -915,7 +915,7 @@ struct ReplicaFeatureTests {
 			$0.writeProgress = .running
 		}
 		await store.receive(\.tasksLoaded) {
-			$0.allRows = try [row(dog), row(milkDone, view: .completed)]
+			$0.allRows = try [row(dog), row(milkDone)]
 			$0.storedTasks = [milkDone, dog]
 		}
 		await store.receive(\.writeCommitted) {
@@ -1251,7 +1251,7 @@ struct ReplicaFeatureTests {
 		}
 		// The CLI completes one of the two, leaving the other selected alone.
 		await store.send(.tasksLoaded(snapshot([milkDone, dog], readIndex: 1))) {
-			$0.allRows = try [row(dog), row(milkDone, view: .completed)]
+			$0.allRows = try [row(dog), row(milkDone)]
 			$0.inspectedTask = UUID(1)
 			$0.readIndex = 1
 			$0.rows = try [row(dog)]
@@ -1278,7 +1278,7 @@ struct ReplicaFeatureTests {
 			$0.selection = [UUID(0)]
 		}
 		await store.send(.tasksLoaded(snapshot([milkDone, dog], readIndex: 1))) {
-			$0.allRows = try [row(dog), row(milkDone, view: .completed)]
+			$0.allRows = try [row(dog), row(milkDone)]
 			$0.readIndex = 1
 			$0.rows = try [row(dog)]
 			$0.selection = []
@@ -1373,7 +1373,7 @@ struct ReplicaFeatureTests {
 			$0.writeProgress = .running
 		}
 		await store.receive(\.tasksLoaded) {
-			$0.allRows = try [row(milk), row(taxes, view: .completed)]
+			$0.allRows = try [row(milk), row(taxes)]
 			$0.storedTasks = [taxes, milk]
 		}
 		// The search would hide it, so it's cleared.
@@ -1491,7 +1491,7 @@ struct ReplicaFeatureTests {
 
 		commit.yield()
 		await store.receive(\.tasksLoaded) {
-			$0.allRows = try [row(milkDone, view: .completed)]
+			$0.allRows = try [row(milkDone)]
 			$0.storedTasks = [milkDone]
 		}
 		await store.receive(\.writeCommitted) {
@@ -1539,7 +1539,7 @@ struct ReplicaFeatureTests {
 			$0.storedTasks = [milkStarted]
 		}
 		await store.receive(\.tasksLoaded) {
-			$0.allRows = try [row(milkDone, view: .completed)]
+			$0.allRows = try [row(milkDone)]
 			$0.storedTasks = [milkDone]
 		}
 		await store.receive(\.writeCommitted) {
@@ -2226,13 +2226,13 @@ struct ReplicaFeatureTests {
 		// Tied on Urgency, so in ID order.
 		continuation.yield(.success(snapshot([dog, taxes, milk])))
 		await store.receive(\.readSucceeded) {
-			$0.allRows = try [row(milk), row(dog), row(taxes, view: .completed)]
+			$0.allRows = try [row(milk), row(dog), row(taxes)]
 			$0.isReplicaOpen = true
 			$0.storedTasks = [dog, taxes, milk]
 			$0.rows = try [row(milk), row(dog)]
 		}
 		await store.send(.sortOrderChanged([TaskSort(.description, order: .reverse)])) {
-			$0.allRows = try [row(dog), row(taxes, view: .completed), row(milk)]
+			$0.allRows = try [row(dog), row(taxes), row(milk)]
 			$0.rows = try [row(dog), row(milk)]
 			$0.sortOrder = [TaskSort(.description, order: .reverse)]
 		}
@@ -2244,7 +2244,7 @@ struct ReplicaFeatureTests {
 		continuation.yield(.success(snapshot([dog, taxes, milkDone])))
 		// Down to one selected task, which the inspector takes.
 		await store.receive(\.readSucceeded) {
-			$0.allRows = try [row(dog), row(taxes, view: .completed), row(milkDone, view: .completed)]
+			$0.allRows = try [row(dog), row(taxes), row(milkDone)]
 			$0.inspectedTask = UUID(1)
 			$0.storedTasks = [dog, taxes, milkDone]
 			$0.rows = try [row(dog)]
@@ -2378,6 +2378,140 @@ struct ReplicaFeatureTests {
 	}
 
 	@Test
+	func sidebarCountsAStartedTaskUnderBothActiveAndPending() throws {
+		let started = ["start": String(Int(now.timeIntervalSince1970))]
+		let rows = try (0 ..< 5).map { seed in
+			try row(storedTask(seed, "Task \(seed)", workingSetID: seed + 1, seed < 2 ? started : [:]))
+		}
+
+		let sidebar = Sidebar(rows: rows, selection: [])
+
+		#expect(
+			sidebar.views.map(\.item)
+				== [.view(.active), .view(.pending), .view(.waiting), .view(.completed), .view(.deleted)],
+		)
+		#expect(sidebar.views.map(\.count) == [2, 5, 0, 0, 0])
+	}
+
+	@Test
+	func activeListsTheStartedTasksThatArentWaiting() async {
+		let store = TestStore(initialState: ReplicaFeature.State(bookmark: Data())) {
+			ReplicaFeature()
+		} withDependencies: {
+			$0.date.now = now
+			$0.timeZone = .gmt
+		}
+		store.exhaustivity = .off
+		let started = String(Int(now.timeIntervalSince1970))
+		let later = String(Int(now.timeIntervalSince1970) + 3_600)
+		let plumber = storedTask(0, "Call the plumber", workingSetID: 1, ["project": "Home"])
+		let tasks = [
+			storedTask(1, "Fix the build", workingSetID: 2, ["project": "Work", "start": started]),
+			storedTask(2, "Sweep", workingSetID: 3, ["project": "Home"]),
+			storedTask(3, "Ring the client", workingSetID: 4, ["start": started, "wait": later]),
+		]
+		var startedPlumber = plumber
+		startedPlumber.properties["start"] = started
+		await store.send(.tasksLoaded(snapshot([startedPlumber] + tasks)))
+		let descriptions = { store.state.rows.map(\.task.description).sorted() }
+
+		await store.send(\.binding.sidebarSelection, [.view(.active)])
+		#expect(descriptions() == ["Call the plumber", "Fix the build"])
+
+		await store.send(\.binding.sidebarSelection, [.view(.active), .view(.pending)])
+		#expect(descriptions() == ["Call the plumber", "Fix the build", "Sweep"])
+
+		await store.send(\.binding.sidebarSelection, [.project("Home"), .view(.active)])
+		#expect(descriptions() == ["Call the plumber"])
+		#expect(store.state.sidebar.projects.map(\.count) == [1, 1])
+
+		await store.send(\.binding.sidebarSelection, [.view(.waiting)])
+		#expect(descriptions() == ["Ring the client"])
+
+		// Stopped, it leaves Active and stays in Pending.
+		await store.send(.tasksLoaded(snapshot([plumber] + tasks, readIndex: 1)))
+		#expect(store.state.sidebar.views.map(\.count) == [1, 3, 1, 0, 0])
+	}
+
+	@Test
+	func stoppingAnEditKeptTaskDropsItFromActive() async throws {
+		let started = String(Int(now.timeIntervalSince1970))
+		let bike = storedTask(0, "Fix the bike", workingSetID: 1, ["start": started])
+		let tagged = storedTask(
+			0,
+			"Fix the bike",
+			workingSetID: 1,
+			["start": started, "tag_outdoor": "x"],
+		)
+		let stopped = storedTask(0, "Fix the bike", workingSetID: 1, ["tag_outdoor": "x"])
+		let snapshots = LockIsolated([tagged, stopped])
+		var initialState = try loadedState([bike], selection: [UUID(0)])
+		initialState.sidebarSelection = [.view(.active)]
+		let store = TestStore(initialState: initialState) {
+			ReplicaFeature()
+		} withDependencies: {
+			$0.continuousClock = TestClock()
+			$0.date.now = now
+			$0.replicaClient.apply = { _, _, _ in
+				let task = snapshots.withValue { $0.removeFirst() }
+				return ApplyOutcome(isCommitted: true, snapshot: snapshot([task]))
+			}
+			$0.timeZone = .gmt
+		}
+		store.exhaustivity = .off
+
+		await store.send(.inspectorFieldSubmitted([UUID(0)], .addTags(["outdoor"])))
+		await store.receive(\.writeCommitted)
+		await store.send(.startStopButtonTapped)
+		await store.receive(\.writeCommitted)
+
+		#expect(store.state.rows.isEmpty)
+		#expect(store.state.sidebar.views.map(\.count) == [0, 1, 0, 0, 0])
+	}
+
+	@Test
+	func aStopThatFailsKeepsWhatAnEditKept() async throws {
+		let started = String(Int(now.timeIntervalSince1970))
+		let bike = storedTask(0, "Fix the bike", workingSetID: 1, ["project": "Home", "start": started])
+		let moved = storedTask(
+			0,
+			"Fix the bike",
+			workingSetID: 1,
+			["project": "Work", "start": started],
+		)
+		let attempts = LockIsolated(0)
+		var initialState = try loadedState([bike], selection: [UUID(0)])
+		initialState.sidebarSelection = [.project("Home"), .view(.active)]
+		let store = TestStore(initialState: initialState) {
+			ReplicaFeature()
+		} withDependencies: {
+			$0.continuousClock = TestClock()
+			$0.date.now = now
+			$0.replicaClient.apply = { _, _, _ in
+				let attempt = attempts.withValue {
+					$0 += 1
+					return $0
+				}
+				guard attempt == 1 else {
+					throw ReplicaError.failed("The disk is full.")
+				}
+				return ApplyOutcome(isCommitted: true, snapshot: snapshot([moved]))
+			}
+			$0.timeZone = .gmt
+		}
+		store.exhaustivity = .off
+
+		// Moves the task out of Home, which only the keep holds it in.
+		await store.send(.inspectorFieldSubmitted([UUID(0)], .set("project", .string("Work"))))
+		await store.receive(\.writeCommitted)
+		await store.send(.startStopButtonTapped)
+		await store.receive(\.writeFailed)
+		await store.send(.writeFailureDismissed)
+
+		#expect(store.state.rows.map(\.id) == [UUID(0)])
+	}
+
+	@Test
 	func sidebarListsProjectsAndTagsFromTheSelectedViewsAndKeepsSelectedOnes() throws {
 		let rows = try [
 			row(storedTask(0, "Dig", workingSetID: 1, ["project": "Home.Garden", "tag_phone": "x"])),
@@ -2390,13 +2524,12 @@ struct ReplicaFeatureTests {
 					workingSetID: nil,
 					["project": "Work", "tag_bug": "x"],
 				),
-				view: .completed,
 			),
 		]
 
 		let sidebar = Sidebar(rows: rows, selection: [.project("Errands"), .tag("bug")])
 
-		#expect(sidebar.views.map(\.count) == [2, 0, 1, 0])
+		#expect(sidebar.views.map(\.count) == [0, 2, 0, 1, 0])
 		#expect(
 			sidebar.projects == [
 				Sidebar.Project(children: [], count: 0, name: "Errands"),
@@ -2539,7 +2672,7 @@ struct ReplicaFeatureTests {
 		continuation.yield(.success(snapshot([call])))
 		await store.receive(\.readSucceeded)
 		#expect(store.state.rows.isEmpty)
-		#expect(store.state.sidebar.views.map(\.count) == [0, 1, 0, 0])
+		#expect(store.state.sidebar.views.map(\.count) == [0, 0, 1, 0, 0])
 
 		// Past `wait`, with nothing committed to the Replica.
 		time.setValue(now.addingTimeInterval(60))
@@ -2613,10 +2746,7 @@ private func loadedState(
 	selection: Set<UUID> = [],
 ) throws -> ReplicaFeature.State {
 	var state = ReplicaFeature.State(bookmark: Data())
-	state.allRows = try tasks.map { stored in
-		let task = Models.Task(stored, udaTypes: Taskrc.defaults.udaTypes)
-		return try row(stored, view: #require(task.flatMap { TaskView($0, at: now) }))
-	}
+	state.allRows = try tasks.map { try row($0) }
 	state.directory = replicaDirectory
 	state.isReplicaOpen = true
 	state.rows = IdentifiedArray(uniqueElements: state.allRows)
@@ -2680,21 +2810,23 @@ private func series(
 /// The planner a window on TW's defaults writes with.
 private let planner = WritePlanner(taskrc: .defaults, timeZone: .gmt)
 
-/// `stored` as the table shows it on TW's defaults.
+/// `stored` as the table shows it on TW's defaults, at `now`.
 private func row(
 	_ stored: StoredTask,
 	isBlocked: Bool = false,
 	urgency: Double = 0,
-	view: TaskView = .pending,
 ) throws -> TaskRow {
 	let task = Models.Task(stored, udaTypes: Taskrc.defaults.udaTypes)
-	return try TaskRow(
-		isBlocked: isBlocked,
-		task: #require(task),
-		udaColumns: UDAColumn.all(in: .defaults),
-		urgency: urgency,
-		view: view,
-	)
+	let row = task.flatMap { task in
+		TaskRow(
+			isBlocked: isBlocked,
+			task: task,
+			udaColumns: UDAColumn.all(in: .defaults),
+			urgency: urgency,
+			at: now,
+		)
+	}
+	return try #require(row)
 }
 
 /// A task as the Replica stores it, entered at `now`.
