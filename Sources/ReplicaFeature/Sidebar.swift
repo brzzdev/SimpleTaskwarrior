@@ -119,6 +119,7 @@ struct SidebarFilter {
 			&& (tags.isEmpty || tags.contains(where: row.task.tags.contains))
 	}
 
+	/// Whether `row` is in any selected view, which a task in more than one view can be.
 	func isInSelectedViews(_ row: TaskRow) -> Bool {
 		!views.isDisjoint(with: row.views)
 	}

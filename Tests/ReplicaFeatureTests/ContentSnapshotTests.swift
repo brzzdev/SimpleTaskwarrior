@@ -54,7 +54,7 @@ struct ContentSnapshotTests {
 	}
 
 	@Test
-	func inspectorAnnotationLinks() {
+	func inspectorAnnotationLinks() throws {
 		var task = Models.Task(
 			description: "Read a book",
 			id: UUID(0),
@@ -67,7 +67,9 @@ struct ContentSnapshotTests {
 				entry: Date(timeIntervalSince1970: 1_790_000_000),
 			),
 		]
-		let row = TaskRow(isBlocked: false, task: task, udaColumns: [], urgency: 0, views: [.pending])
+		let row = try #require(
+			TaskRow(isBlocked: false, task: task, udaColumns: [], urgency: 0, at: .now),
+		)
 		var state = ReplicaFeature.State(bookmark: Data())
 		state.allRows = [row]
 		state.directory = replicaDirectory

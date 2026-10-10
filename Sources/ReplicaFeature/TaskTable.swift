@@ -21,13 +21,19 @@ struct TaskRow: Equatable, Identifiable {
 		task.tags.sorted().joined(separator: " ")
 	}
 
-	init(
+	/// `task` as the table shows it at `now`, or nil for a Recurrence template, which no fixed view
+	/// shows.
+	init?(
 		isBlocked: Bool,
 		task: Models.Task,
 		udaColumns: [UDAColumn],
 		urgency: Double,
-		views: Set<TaskView>,
+		at now: Date,
 	) {
+		views = TaskView.views(of: task, at: now)
+		guard !views.isEmpty else {
+			return nil
+		}
 		self.isBlocked = isBlocked
 		self.task = task
 		// A value the list doesn't name ranks after every value it does.
@@ -38,7 +44,6 @@ struct TaskRow: Equatable, Identifiable {
 			ranks[uda.name] = uda.values.firstIndex(of: value) ?? uda.values.count
 		}
 		self.urgency = urgency
-		self.views = views
 	}
 
 	fileprivate func sortKey(for column: TaskColumn) -> SortKey? {

@@ -2387,14 +2387,15 @@ struct ReplicaFeatureTests {
 		store.exhaustivity = .off
 		let started = String(Int(now.timeIntervalSince1970))
 		let later = String(Int(now.timeIntervalSince1970) + 3_600)
-		await store.send(
-			.tasksLoaded(snapshot([
-				storedTask(0, "Call the plumber", workingSetID: 1, ["project": "Home", "start": started]),
-				storedTask(1, "Fix the build", workingSetID: 2, ["project": "Work", "start": started]),
-				storedTask(2, "Sweep", workingSetID: 3, ["project": "Home"]),
-				storedTask(3, "Ring the client", workingSetID: 4, ["start": started, "wait": later]),
-			])),
-		)
+		let plumber = storedTask(0, "Call the plumber", workingSetID: 1, ["project": "Home"])
+		let tasks = [
+			storedTask(1, "Fix the build", workingSetID: 2, ["project": "Work", "start": started]),
+			storedTask(2, "Sweep", workingSetID: 3, ["project": "Home"]),
+			storedTask(3, "Ring the client", workingSetID: 4, ["start": started, "wait": later]),
+		]
+		var startedPlumber = plumber
+		startedPlumber.properties["start"] = started
+		await store.send(.tasksLoaded(snapshot([startedPlumber] + tasks)))
 		let descriptions = { store.state.rows.map(\.task.description).sorted() }
 
 		await store.send(\.binding.sidebarSelection, [.view(.active)])
@@ -2409,36 +2410,10 @@ struct ReplicaFeatureTests {
 
 		await store.send(\.binding.sidebarSelection, [.view(.waiting)])
 		#expect(descriptions() == ["Ring the client"])
-	}
 
-	@Test
-	func stoppingATaskDropsItFromActiveButNotPending() async {
-		let store = TestStore(initialState: ReplicaFeature.State(bookmark: Data())) {
-			ReplicaFeature()
-		} withDependencies: {
-			$0.date.now = now
-			$0.timeZone = .gmt
-		}
-		store.exhaustivity = .off
-		let started = ["start": String(Int(now.timeIntervalSince1970))]
-		let tasks = { (startedCount: Int) in
-			(0 ..< 5).map { seed in
-				storedTask(
-					seed,
-					"Task \(seed)",
-					workingSetID: seed + 1,
-					seed < startedCount ? started : [:],
-				)
-			}
-		}
-		await store.send(\.binding.sidebarSelection, [.view(.active)])
-
-		await store.send(.tasksLoaded(snapshot(tasks(2))))
-		#expect(store.state.rows.map(\.id) == [UUID(0), UUID(1)])
-
-		await store.send(.tasksLoaded(snapshot(tasks(1), readIndex: 1)))
-		#expect(store.state.rows.map(\.id) == [UUID(0)])
-		#expect(store.state.sidebar.views.map(\.count) == [1, 5, 0, 0, 0])
+		// Stopped, it leaves Active and stays in Pending.
+		await store.send(.tasksLoaded(snapshot([plumber] + tasks, readIndex: 1)))
+		#expect(store.state.sidebar.views.map(\.count) == [1, 3, 1, 0, 0])
 	}
 
 	@Test
@@ -2746,15 +2721,17 @@ private func row(
 	isBlocked: Bool = false,
 	urgency: Double = 0,
 ) throws -> TaskRow {
-	let decoded = Models.Task(stored, udaTypes: Taskrc.defaults.udaTypes)
-	let task = try #require(decoded)
-	return TaskRow(
-		isBlocked: isBlocked,
-		task: task,
-		udaColumns: UDAColumn.all(in: .defaults),
-		urgency: urgency,
-		views: TaskView.views(of: task, at: now),
-	)
+	let task = Models.Task(stored, udaTypes: Taskrc.defaults.udaTypes)
+	let row = task.flatMap { task in
+		TaskRow(
+			isBlocked: isBlocked,
+			task: task,
+			udaColumns: UDAColumn.all(in: .defaults),
+			urgency: urgency,
+			at: now,
+		)
+	}
+	return try #require(row)
 }
 
 /// A task as the Replica stores it, entered at `now`.
