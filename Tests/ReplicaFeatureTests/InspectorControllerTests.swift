@@ -16,7 +16,7 @@ struct InspectorControllerTests {
 			workingSetID: 4,
 		)
 		let row = try #require(
-			TaskRow(isBlocked: false, task: task, udaColumns: [], urgency: 0, at: Date()),
+			TaskRow(isBlocked: false, task: task, udaColumns: [], urgency: 0, at: now),
 		)
 		var state = ReplicaFeature.State(bookmark: Data(), directory: URL(filePath: "/tmp"))
 		state.allRows = [row]
@@ -47,6 +47,8 @@ struct InspectorControllerTests {
 		#expect(window.frame == frame)
 	}
 }
+
+private let now = Date(timeIntervalSince1970: 1_790_000_000)
 
 /// Shorter than the inspector's form for a task, so the form has to scroll.
 private let paneSize = NSSize(width: 270, height: 300)
