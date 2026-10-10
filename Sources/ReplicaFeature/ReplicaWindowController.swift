@@ -353,6 +353,11 @@ public final class ReplicaWindowController: NSWindowController, NSMenuItemValida
 	}
 
 	@objc
+	public func showActive(_: Any?) {
+		show(.active)
+	}
+
+	@objc
 	public func showCompleted(_: Any?) {
 		show(.completed)
 	}
