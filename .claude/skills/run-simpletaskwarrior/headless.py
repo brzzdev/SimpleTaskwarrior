@@ -1,9 +1,11 @@
 #!/usr/bin/env python3
-"""Drives a hidden instance of the dev build through its Debug driver: no cursor, keyboard or focus.
+"""Drives a hidden instance of the dev build through its Debug driver.
 
-Run from the repo root as `headless.py COMMAND FIXTURE_DIR [ARG...]`. The fixture directory names the
-instance, so agents with their own fixtures run in parallel. Prints the driver's JSON reply, most
-carrying a `dump`, and exits 1 when it holds an `error`.
+It uses no cursor, keyboard or focus.
+
+Run from the repo root as `headless.py COMMAND FIXTURE_DIR [ARG...]`. The fixture directory names
+the instance, so agents with their own fixtures run in parallel. Prints the driver's JSON reply,
+most carrying a `dump`, and exits 1 when it holds an `error`.
 """
 
 import hashlib
@@ -62,7 +64,14 @@ def request(name, args):
 
 def launch(path):
     if os.path.exists(path):
-        os.remove(path)
+        probe = socket.socket(socket.AF_UNIX)
+        try:
+            probe.connect(path)
+            sys.exit("launch: an instance is already running for this fixture; quit it first")
+        except OSError:
+            os.remove(path)
+        finally:
+            probe.close()
     subprocess.run(
         ["open", "-n", "-g", "--env", f"STW_DRIVER_SOCKET={path}", APP,
          "--args", "-ApplePersistenceIgnoreState", "YES"],

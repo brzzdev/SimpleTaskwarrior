@@ -48,10 +48,10 @@ $H quit "$F"
 **Check with `dump`, confirm with `shot`.** Every command but `launch`, `choose` and `quit` replies
 with a `dump`: each table's visible columns, cell text and selected rows, the first responder, and
 the sheet's text and buttons. An `error` in the reply, with exit status 1, means the command did
-nothing: a menu item that's disabled, a title that isn't there. Read the table from `dump`, then look at a screenshot
-for anything visual. The fixture gives 7 Pending rows plus 2 Recurrence instances: an active task
-(3), a blocked one (7), one with 2 annotations (4), one `scheduled` 4 minutes out (9), and one
-waiting.
+nothing: a menu item that's disabled, a title that isn't there. Read the table from `dump`, then
+look at a screenshot for anything visual. The fixture gives 7 Pending rows plus 2 Recurrence
+instances: an active task (3), a blocked one (7), one with 2 annotations (4), one `scheduled` 4
+minutes out (9), and one waiting.
 
 **Screenshots are the window alone**, rendered by the app at the display's scale (2× on Retina), so
 a point is `pixel / 2` from the window's top left.
@@ -66,12 +66,14 @@ a point is `pixel / 2` from the window's top left.
   `driver.sh` before chasing it.
 - **`choose` covers the Open Replica, Choose Taskrc and Locate Replica panels**, whichever opens
   next. A panel with no override would show on Paul's screen: give it one in `PanelOverride` too.
-- **Each `$F` is one instance.** Commands for it go to a socket at `/tmp/stw-<hash>.sock`, which
-  `launch` creates. Window restoration is off, so a launch opens no windows until `open`. Every
-  window the instance shows, sheets and alerts included, is transparent and lets clicks through.
-- **The Debug driver is linted by the app build** with SwiftLint strict, as is everything under
-  `.claude/`: a violation fails `just build` with exit 65 and no error printed. Find it with
+- **Each `$F` is one instance**, with a socket of its own that `launch` creates. Window
+  restoration is off, so a launch opens no windows until `open`. Every window the instance shows,
+  sheets and alerts included, is transparent and lets clicks through.
+- **`.claude/` is linted by the app build**, `mouse.swift` included, with SwiftLint strict: a
+  violation fails `just build` with exit 65 and no error printed. Find it with
   `just build > log 2>&1; grep ❌ log`.
+- **Open a Replica with `open`, which replies with any error.** Open Replica… with `choose`
+  reports a failure in a modal alert, which blocks the driver until the instance is killed.
 - **`task` creates Recurrence instances only when a report runs**, so the fixture ends with
   `task next`. Without it the Replica has the template and no instances.
 - **Autosave is keyed by the standardized path**, which drops `/private` and doubled slashes
