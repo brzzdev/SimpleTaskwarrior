@@ -2,26 +2,30 @@
 import Foundation
 import Models
 
-/// One of the fixed views at the top of the sidebar, which splits tasks by status.
+/// One of the fixed views at the top of the sidebar. Pending, Waiting, Completed and Deleted
+/// split tasks by status; Active overlaps Pending.
 enum TaskView: Hashable {
+	case active
 	case completed
 	case deleted
 	case pending
 	case waiting
 
 	/// In sidebar order.
-	static let all: [Self] = [.pending, .waiting, .completed, .deleted]
+	static let all: [Self] = [.active, .pending, .waiting, .completed, .deleted]
 
-	/// The view `task` shows in at `now`, or nil for a Recurrence template, which none shows.
-	init?(_ task: Models.Task, at now: Date) {
+	/// The views `task` shows in at `now`, or none for a Recurrence template. A started pending task
+	/// is in Active as well as Pending, as `task active` and the `+ACTIVE` virtual tag count it.
+	static func views(of task: Models.Task, at now: Date) -> Set<Self> {
 		guard !task.isTemplate else {
-			return nil
+			return []
 		}
 		switch task.status {
-		case .completed: self = .completed
-		case .deleted: self = .deleted
-		case .pending: self = task.isWaiting(at: now) ? .waiting : .pending
-		case .recurring: return nil
+		case .completed: return [.completed]
+		case .deleted: return [.deleted]
+		case .pending where task.isWaiting(at: now): return [.waiting]
+		case .pending: return task.start == nil ? [.pending] : [.active, .pending]
+		case .recurring: return []
 		}
 	}
 }
@@ -58,10 +62,10 @@ struct Sidebar: Equatable {
 	/// no task has it.
 	init(rows: [TaskRow], selection: Set<SidebarItem>) {
 		views = TaskView.all.map { view in
-			Count(count: rows.count { $0.view == view }, item: .view(view))
+			Count(count: rows.count { $0.views.contains(view) }, item: .view(view))
 		}
 		let filter = SidebarFilter(selection)
-		let listed = rows.filter { filter.views.contains($0.view) }
+		let listed = rows.filter(filter.isInSelectedViews)
 
 		var projectCounts = zeroCounts(filter.projects.flatMap(\.ancestry))
 		for name in listed.compactMap(\.task.project).flatMap(\.ancestry) {
@@ -110,9 +114,13 @@ struct SidebarFilter {
 	/// Whether `row` shows: in any selected view, and in any selected project and with any selected
 	/// tag where those sections have some selected.
 	func includes(_ row: TaskRow) -> Bool {
-		views.contains(row.view)
+		isInSelectedViews(row)
 			&& (projects.isEmpty || projects.contains(where: row.task.isIn(project:)))
 			&& (tags.isEmpty || tags.contains(where: row.task.tags.contains))
+	}
+
+	func isInSelectedViews(_ row: TaskRow) -> Bool {
+		!views.isDisjoint(with: row.views)
 	}
 }
 

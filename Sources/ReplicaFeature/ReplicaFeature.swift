@@ -1438,12 +1438,15 @@ struct ReplicaFeature {
 				udaTypes: taskrc.udaTypes,
 				uuid: id.uuidString,
 				workingSetID: nil,
-			),
-			let view = TaskView(task, at: now)
+			)
 		else {
 			return true
 		}
-		let row = TaskRow(isBlocked: false, task: task, udaColumns: [], urgency: 0, view: view)
+		let views = TaskView.views(of: task, at: now)
+		guard !views.isEmpty else {
+			return true
+		}
+		let row = TaskRow(isBlocked: false, task: task, udaColumns: [], urgency: 0, views: views)
 		return SidebarFilter(state.sidebarSelection).includes(row)
 	}
 
@@ -1493,15 +1496,17 @@ struct ReplicaFeature {
 		let urgencies = UrgencyCoefficients(taskrc).urgencies(of: tasks, at: now, in: timeZone)
 		state.udaColumns = UDAColumn.all(in: taskrc)
 		state.allRows = tasks.compactMap { [now, udaColumns = state.udaColumns] task in
-			TaskView(task, at: now).map { view in
-				TaskRow(
-					isBlocked: blocked.contains(task.id),
-					task: task,
-					udaColumns: udaColumns,
-					urgency: urgencies[task.id] ?? 0,
-					view: view,
-				)
+			let views = TaskView.views(of: task, at: now)
+			guard !views.isEmpty else {
+				return nil
 			}
+			return TaskRow(
+				isBlocked: blocked.contains(task.id),
+				task: task,
+				udaColumns: udaColumns,
+				urgency: urgencies[task.id] ?? 0,
+				views: views,
+			)
 		}
 		sortRows(&state)
 	}

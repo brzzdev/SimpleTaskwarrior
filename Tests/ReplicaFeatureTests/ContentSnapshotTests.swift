@@ -67,7 +67,7 @@ struct ContentSnapshotTests {
 				entry: Date(timeIntervalSince1970: 1_790_000_000),
 			),
 		]
-		let row = TaskRow(isBlocked: false, task: task, udaColumns: [], urgency: 0, view: .pending)
+		let row = TaskRow(isBlocked: false, task: task, udaColumns: [], urgency: 0, views: [.pending])
 		var state = ReplicaFeature.State(bookmark: Data())
 		state.allRows = [row]
 		state.directory = replicaDirectory

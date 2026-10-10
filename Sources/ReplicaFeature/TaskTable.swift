@@ -10,8 +10,8 @@ struct TaskRow: Equatable, Identifiable {
 	/// Where the task's value of each UDA with `values` falls in that list.
 	var udaRanks: [String: Int]
 	var urgency: Double
-	/// The fixed view the task shows in.
-	var view: TaskView
+	/// The fixed views the task shows in.
+	var views: Set<TaskView>
 
 	var id: Models.Task.ID {
 		task.id
@@ -26,7 +26,7 @@ struct TaskRow: Equatable, Identifiable {
 		task: Models.Task,
 		udaColumns: [UDAColumn],
 		urgency: Double,
-		view: TaskView,
+		views: Set<TaskView>,
 	) {
 		self.isBlocked = isBlocked
 		self.task = task
@@ -38,7 +38,7 @@ struct TaskRow: Equatable, Identifiable {
 			ranks[uda.name] = uda.values.firstIndex(of: value) ?? uda.values.count
 		}
 		self.urgency = urgency
-		self.view = view
+		self.views = views
 	}
 
 	fileprivate func sortKey(for column: TaskColumn) -> SortKey? {
