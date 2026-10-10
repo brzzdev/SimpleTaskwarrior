@@ -60,6 +60,12 @@ public final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate,
 		return true
 	}
 
+	#if DEBUG
+	public func applicationDidFinishLaunching(_: Notification) {
+		driver = DebugDriver { [weak self] in try await self?.openWindow($0) }
+	}
+	#endif
+
 	/// Asks for a Replica when the app launches or is reopened with no window: AppKit skips it when
 	/// it restored windows, and when the launch was to open a Replica.
 	public func applicationOpenUntitledFile(_: NSApplication) -> Bool {
@@ -77,12 +83,6 @@ public final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate,
 	public func applicationSupportsSecureRestorableState(_: NSApplication) -> Bool {
 		true
 	}
-
-	#if DEBUG
-	public func applicationDidFinishLaunching(_: Notification) {
-		driver = DebugDriver { [weak self] in try await self?.openWindow($0) }
-	}
-	#endif
 
 	public func applicationWillFinishLaunching(_: Notification) {
 		#if DEBUG

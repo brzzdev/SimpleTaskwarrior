@@ -12,6 +12,7 @@ import ReplicaFeature
 /// it, from the Replica window.
 @MainActor
 final class DebugDriver {
+	/// The other half is `request` in `headless.py`, which builds each one from the command line.
 	enum Command: Decodable {
 		case choose(path: String)
 		case click(row: Int, column: String?)
@@ -19,13 +20,29 @@ final class DebugDriver {
 		case contextMenu(item: String, row: Int?)
 		case dump
 		case frame(width: Double, height: Double)
-		case key(characters: String, modifiers: [String])
+		case key(characters: String, modifiers: [Modifier])
 		case menu(menu: String, item: String)
 		case open(path: String)
 		case quit
 		case sheet(button: String)
 		case shot(path: String)
 		case type(text: String)
+	}
+
+	enum Modifier: String, Decodable {
+		case command
+		case control
+		case option
+		case shift
+
+		var flag: NSEvent.ModifierFlags {
+			switch self {
+			case .command: .command
+			case .control: .control
+			case .option: .option
+			case .shift: .shift
+			}
+		}
 	}
 
 	struct Failure: Error, CustomStringConvertible {
@@ -46,11 +63,25 @@ final class DebugDriver {
 	/// is at the Mac.
 	static let socketPath = ProcessInfo.processInfo.environment["STW_DRIVER_SOCKET"]
 
+	/// The key codes of the keys whose characters say nothing of the key: AppKit reads the code for
+	/// these. Every other key is sent with code 0.
+	private static let keyCodes: [String: UInt16] = [
+		"\r": 36,
+		"\t": 48,
+		"\u{7F}": 51,
+		"\u{1B}": 53,
+	]
+	/// How long `open` waits for the Replica to load before replying with an empty table.
+	private static let loadTimeout = Duration.seconds(2)
+	/// How long a command waits for the store's effects, and the view updates they cause, to land
+	/// before its dump.
+	private static let settleDelay = Duration.milliseconds(300)
+
 	private let listener: NWListener
-	private let open: (URL) async throws -> NSWindow?
+	private let openWindow: (URL) async throws -> NSWindow?
 	private var windowObserver: (any NSObjectProtocol)?
 
-	init?(open: @escaping (URL) async throws -> NSWindow?) {
+	init?(openWindow: @escaping (URL) async throws -> NSWindow?) {
 		guard let path = Self.socketPath else {
 			return nil
 		}
@@ -61,7 +92,7 @@ final class DebugDriver {
 			return nil
 		}
 		self.listener = listener
-		self.open = open
+		self.openWindow = openWindow
 		listener.newConnectionHandler = { [weak self] connection in
 			MainActor.assumeIsolated {
 				connection.start(queue: .main)
@@ -83,6 +114,109 @@ final class DebugDriver {
 				}
 			}
 		}
+	}
+
+	/// Runs a click without its tracking loop blocking the driver: the loop waits for a mouse-up,
+	/// so the up is queued before the down is sent. A window that isn't key doesn't hand its first
+	/// responder to the view clicked, so that's done here, as a key window would.
+	private func click(_ point: NSPoint, in window: NSWindow) {
+		if
+			let hit = window.contentView?.superview?.hitTest(point),
+			let responder = sequence(first: hit, next: \.superview).first(where: \.acceptsFirstResponder)
+		{
+			window.makeFirstResponder(responder)
+		}
+		NSApp.postEvent(mouse(.leftMouseUp, at: point, in: window), atStart: false)
+		window.sendEvent(mouse(.leftMouseDown, at: point, in: window))
+	}
+
+	/// Sends a key to `window`. A menu's key equivalent resolves its target as choosing the item
+	/// does, so it's performed the same way.
+	private func key(_ characters: String, _ modifiers: [Modifier], in window: NSWindow) throws {
+		let flags = NSEvent.ModifierFlags(modifiers.map(\.flag))
+		// An uppercase key equivalent implies Shift.
+		let item = menuItems(in: NSApp.mainMenu).first { item in
+			let isShifted = item.keyEquivalent != item.keyEquivalent.lowercased()
+			return item.keyEquivalent.lowercased() == characters.lowercased()
+				&& item.keyEquivalentModifierMask.union(isShifted ? .shift : []) == flags
+		}
+		if let item {
+			try perform(item, in: window)
+			return
+		}
+		guard
+			let event = NSEvent.keyEvent(
+				with: .keyDown,
+				location: .zero,
+				modifierFlags: flags,
+				timestamp: ProcessInfo.processInfo.systemUptime,
+				windowNumber: window.windowNumber,
+				context: nil,
+				characters: characters,
+				charactersIgnoringModifiers: characters,
+				isARepeat: false,
+				keyCode: Self.keyCodes[characters] ?? 0,
+			)
+		else {
+			throw Failure("can't make a key event")
+		}
+		if !window.performKeyEquivalent(with: event) {
+			window.sendEvent(event)
+		}
+	}
+
+	private func mouse(_ type: NSEvent.EventType, at point: NSPoint, in window: NSWindow) -> NSEvent {
+		// Only nil for a type that isn't a mouse event.
+		// swiftlint:disable:next force_unwrapping
+		NSEvent.mouseEvent(
+			with: type,
+			location: point,
+			modifierFlags: [],
+			timestamp: ProcessInfo.processInfo.systemUptime,
+			windowNumber: window.windowNumber,
+			context: nil,
+			eventNumber: 0,
+			clickCount: 1,
+			pressure: 1,
+		)!
+	}
+
+	/// Runs `body` on the Replica window, then replies with the window once it settles.
+	private func onWindow(_ body: (NSWindow) throws -> Void) async throws -> Reply {
+		let window = try replicaWindow()
+		try body(window)
+		try await Task.sleep(for: Self.settleDelay)
+		return Reply(dump: Dump(window))
+	}
+
+	/// Validates and performs `item`, as choosing it from the menu would, finding its target from
+	/// `window` as AppKit would were it key: from the view a context menu belongs to, or else the
+	/// first responder.
+	private func perform(
+		_ item: NSMenuItem,
+		in window: NSWindow,
+		from view: NSView? = nil,
+	) throws {
+		let title = item.title
+		guard let action = item.action else {
+			throw Failure("\(title) has no action")
+		}
+		let chain = sequence(first: view ?? window.firstResponder, next: { $0?.nextResponder })
+			.compactMap { $0 as AnyObject? }
+		let candidates = chain + [window.windowController, window.delegate, NSApp, NSApp.delegate]
+			.compactMap { $0 as AnyObject? }
+		guard
+			let target = item.target ?? candidates.first(where: { $0.responds(to: action) })
+		else {
+			throw Failure("nothing handles \(title)")
+		}
+		let isEnabled = (target as? any NSMenuItemValidation)?.validateMenuItem(item)
+			?? (target as? any NSUserInterfaceValidations)?.validateUserInterfaceItem(item)
+			?? true
+		guard isEnabled else {
+			throw Failure("\(title) is disabled")
+		}
+		NSApp.sendAction(action, to: target, from: item)
 	}
 
 	private func receive(on connection: NWConnection, buffer: Data) {
@@ -107,6 +241,19 @@ final class DebugDriver {
 				}
 			}
 		}
+	}
+
+	/// The window commands act on. Each agent runs its own instance, so it's the only one.
+	private func replicaWindow() throws -> NSWindow {
+		let prefix = AppDelegate.replicaWindowPrefix
+		guard
+			let window = NSApp.orderedWindows.first(where: {
+				$0.identifier?.rawValue.hasPrefix(prefix) == true
+			})
+		else {
+			throw Failure("no Replica window")
+		}
+		return window
 	}
 
 	private func reply(to line: Data) async -> Reply {
@@ -157,11 +304,11 @@ final class DebugDriver {
 				guard let match = menu.item(withTitle: item) else {
 					throw Failure("no item \(item)")
 				}
-				try perform(match, in: window)
+				try perform(match, in: window, from: view)
 			}
 
 		case .dump:
-			return try Reply(dump: Dump(target()))
+			return try Reply(dump: Dump(replicaWindow()))
 
 		case let .frame(width, height):
 			return try await onWindow { window in
@@ -184,12 +331,14 @@ final class DebugDriver {
 
 		case let .open(path):
 			// Its window, so the dump isn't of another Replica's window in front.
-			guard let window = try await open(URL(filePath: path, directoryHint: .isDirectory)) else {
+			let url = URL(filePath: path, directoryHint: .isDirectory)
+			guard let window = try await openWindow(url) else {
 				throw Failure("no window for \(path)")
 			}
-			// The table fills once the Replica loads; an empty Replica waits out the 2 seconds.
+			// The table fills once the Replica loads; an empty Replica waits out the timeout.
 			let table = try table(in: window)
-			for _ in 0 ..< 40 where table.numberOfRows == 0 {
+			let deadline = ContinuousClock.now + Self.loadTimeout
+			while table.numberOfRows == 0, ContinuousClock.now < deadline {
 				try await Task.sleep(for: .milliseconds(50))
 			}
 			return Reply(dump: Dump(window))
@@ -214,7 +363,7 @@ final class DebugDriver {
 			}
 
 		case let .shot(path):
-			let window = try target()
+			let window = try replicaWindow()
 			let frameView = try window.contentView?.superview ?? { throw Failure("no frame view") }()
 			guard let bitmap = frameView.bitmapImageRepForCachingDisplay(in: frameView.bounds) else {
 				throw Failure("can't render the window")
@@ -233,129 +382,11 @@ final class DebugDriver {
 		}
 	}
 
-	/// Runs a click without its tracking loop blocking the driver: the loop waits for a mouse-up,
-	/// so the up is queued before the down is sent. A window that isn't key doesn't hand its first
-	/// responder to the view clicked, so that's done here, as a key window would.
-	private func click(_ point: NSPoint, in window: NSWindow) {
-		if
-			let hit = window.contentView?.superview?.hitTest(point),
-			let responder = sequence(first: hit, next: \.superview).first(where: \.acceptsFirstResponder)
-		{
-			window.makeFirstResponder(responder)
-		}
-		NSApp.postEvent(mouse(.leftMouseUp, at: point, in: window), atStart: false)
-		window.sendEvent(mouse(.leftMouseDown, at: point, in: window))
-	}
-
-	/// Sends a key to `window`. A menu's key equivalent resolves its target as choosing the item
-	/// does, so it's performed the same way.
-	private func key(_ characters: String, _ modifiers: [String], in window: NSWindow) throws {
-		let flags = try NSEvent.ModifierFlags(modifiers.map { name in
-			switch name {
-			case "command": .command
-			case "control": .control
-			case "option": .option
-			case "shift": .shift
-			default: throw Failure("no modifier \(name)")
-			}
-		})
-		let item = menuItems(in: NSApp.mainMenu).first {
-			$0.keyEquivalent == characters && $0.keyEquivalentModifierMask == flags
-		}
-		if let item {
-			try perform(item, in: window)
-			return
-		}
-		guard
-			let event = NSEvent.keyEvent(
-				with: .keyDown,
-				location: .zero,
-				modifierFlags: flags,
-				timestamp: ProcessInfo.processInfo.systemUptime,
-				windowNumber: window.windowNumber,
-				context: nil,
-				characters: characters,
-				charactersIgnoringModifiers: characters,
-				isARepeat: false,
-				keyCode: 0,
-			)
-		else {
-			throw Failure("can't make a key event")
-		}
-		if !window.performKeyEquivalent(with: event) {
-			window.sendEvent(event)
-		}
-	}
-
-	private func mouse(_ type: NSEvent.EventType, at point: NSPoint, in window: NSWindow) -> NSEvent {
-		// Only nil for a type that isn't a mouse event.
-		// swiftlint:disable:next force_unwrapping
-		NSEvent.mouseEvent(
-			with: type,
-			location: point,
-			modifierFlags: [],
-			timestamp: ProcessInfo.processInfo.systemUptime,
-			windowNumber: window.windowNumber,
-			context: nil,
-			eventNumber: 0,
-			clickCount: 1,
-			pressure: 1,
-		)!
-	}
-
-	/// Runs `body` on the Replica window, then replies with the window once the store's effects
-	/// and the view updates they cause have landed.
-	private func onWindow(_ body: (NSWindow) throws -> Void) async throws -> Reply {
-		let window = try target()
-		try body(window)
-		try await Task.sleep(for: .milliseconds(300))
-		return Reply(dump: Dump(window))
-	}
-
-	/// Validates and performs `item`, as choosing it from the menu would, finding its target from
-	/// `window` as AppKit would were it key.
-	private func perform(_ item: NSMenuItem, in window: NSWindow) throws {
-		let title = item.title
-		guard let action = item.action else {
-			throw Failure("\(title) has no action")
-		}
-		let chain = sequence(first: window.firstResponder, next: { $0?.nextResponder })
-			.compactMap { $0 as AnyObject? }
-		let candidates = chain + [window.windowController, window.delegate, NSApp, NSApp.delegate]
-			.compactMap { $0 as AnyObject? }
-		guard
-			let target = item.target ?? candidates.first(where: { $0.responds(to: action) })
-		else {
-			throw Failure("nothing handles \(title)")
-		}
-		let isEnabled = (target as? any NSMenuItemValidation)?.validateMenuItem(item)
-			?? (target as? any NSUserInterfaceValidations)?.validateUserInterfaceItem(item)
-			?? true
-		guard isEnabled else {
-			throw Failure("\(title) is disabled")
-		}
-		NSApp.sendAction(action, to: target, from: item)
-	}
-
 	private func table(in window: NSWindow) throws -> NSTableView {
-		let tables = descendants(of: window.contentView).compactMap { $0 as? NSTableView }
-		guard let table = tables.first(where: { !($0 is NSOutlineView) }) else {
+		guard let table = tableViews(in: window).first(where: { !($0 is NSOutlineView) }) else {
 			throw Failure("no task table")
 		}
 		return table
-	}
-
-	/// The window commands act on. Each agent runs its own instance, so it's the only one.
-	private func target() throws -> NSWindow {
-		let prefix = AppDelegate.replicaWindowPrefix
-		guard
-			let window = NSApp.orderedWindows.first(where: {
-				$0.identifier?.rawValue.hasPrefix(prefix) == true
-			})
-		else {
-			throw Failure("no Replica window")
-		}
-		return window
 	}
 }
 
@@ -373,8 +404,13 @@ struct Dump: Encodable {
 	}
 
 	struct Table: Encodable {
+		enum Kind: String, Encodable {
+			case outline
+			case table
+		}
+
 		let columns: [Column]
-		let kind: String
+		let kind: Kind
 		let rows: [[String]]
 		let selectedRows: [Int]
 	}
@@ -399,7 +435,7 @@ struct Dump: Encodable {
 				},
 			)
 		}
-		tables = descendants(of: window.contentView).compactMap { $0 as? NSTableView }.map { table in
+		tables = tableViews(in: window).map { table in
 			// Indexed in `tableColumns`, which is how a cell's view is asked for.
 			let columns = table.tableColumns.enumerated().filter { !$0.element.isHidden }
 			return Table(
@@ -410,7 +446,7 @@ struct Dump: Encodable {
 						width: column.width,
 					)
 				},
-				kind: table is NSOutlineView ? "outline" : "table",
+				kind: table is NSOutlineView ? .outline : .table,
 				rows: (0 ..< table.numberOfRows).map { row in
 					columns.map { index, _ in
 						let cell = table.view(atColumn: index, row: row, makeIfNecessary: true)
@@ -429,15 +465,21 @@ struct Dump: Encodable {
 }
 
 @MainActor
-private func menuItems(in menu: NSMenu?) -> [NSMenuItem] {
-	(menu?.items ?? []).flatMap { [$0] + menuItems(in: $0.submenu) }
-}
-
-@MainActor
 private func descendants(of view: NSView?) -> [NSView] {
 	guard let view else {
 		return []
 	}
 	return [view] + view.subviews.flatMap(descendants)
+}
+
+@MainActor
+private func menuItems(in menu: NSMenu?) -> [NSMenuItem] {
+	(menu?.items ?? []).flatMap { [$0] + menuItems(in: $0.submenu) }
+}
+
+/// The window's tables, the sidebar's outline included.
+@MainActor
+private func tableViews(in window: NSWindow) -> [NSTableView] {
+	descendants(of: window.contentView).compactMap { $0 as? NSTableView }
 }
 #endif
