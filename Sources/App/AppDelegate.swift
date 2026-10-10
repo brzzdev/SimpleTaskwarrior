@@ -11,11 +11,16 @@ import Sparkle
 public final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate,
 	NSWindowRestoration
 {
+	/// Starts each Replica window's identifier and autosave name, ahead of the Replica's path.
+	static let replicaWindowPrefix = "replica:"
+
 	/// Where the next new window goes, just below and right of the last.
 	private var cascadePoint = NSPoint.zero
 	/// Each window's controller, kept until the window closes.
 	private var controllers: [ReplicaWindowController] = []
 	#if DEBUG
+	/// Serves `headless.py` when it launched the app with a socket to listen on.
+	private var driver: DebugDriver?
 	/// None, so a Debug build never checks the production feed or installs the Release product over
 	/// itself.
 	private let updater: SPUStandardUpdaterController? = nil
@@ -58,6 +63,13 @@ public final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate,
 	/// Asks for a Replica when the app launches or is reopened with no window: AppKit skips it when
 	/// it restored windows, and when the launch was to open a Replica.
 	public func applicationOpenUntitledFile(_: NSApplication) -> Bool {
+		#if DEBUG
+		// The driver opens Replicas itself, and a panel would cover the screen of whoever is at
+		// the Mac.
+		if DebugDriver.socketPath != nil {
+			return true
+		}
+		#endif
 		openReplica(nil)
 		return true
 	}
@@ -66,7 +78,19 @@ public final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate,
 		true
 	}
 
+	#if DEBUG
+	public func applicationDidFinishLaunching(_: Notification) {
+		driver = DebugDriver { [weak self] in try await self?.openWindow($0) }
+	}
+	#endif
+
 	public func applicationWillFinishLaunching(_: Notification) {
+		#if DEBUG
+		if DebugDriver.socketPath != nil {
+			// No Dock icon or menu bar, and never activated by a window opening.
+			NSApp.setActivationPolicy(.accessory)
+		}
+		#endif
 		NSApp.mainMenu = mainMenu(openRecent: self, updater: updater)
 	}
 
@@ -101,6 +125,12 @@ public final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate,
 
 	@objc
 	func openReplica(_: Any?) {
+		#if DEBUG
+		if let directory = PanelOverride.take() {
+			open(directory)
+			return
+		}
+		#endif
 		_Concurrency.Task {
 			let panel = NSOpenPanel()
 			panel.canChooseDirectories = true
@@ -114,6 +144,32 @@ public final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate,
 		}
 	}
 
+	/// Brings forward the window on the Replica in `directory`, opening one if it has none.
+	@discardableResult
+	func openWindow(_ directory: URL) async throws -> NSWindow? {
+		@Dependency(\.bookmarkClient) var bookmarkClient
+		@Dependency(\.replicaClient) var replicaClient
+
+		try await replicaClient.validate(directory)
+		let bookmark = try bookmarkClient.create(directory)
+		let folder = try folder(of: bookmark)
+		NSDocumentController.shared.noteNewRecentDocumentURL(folder)
+		if let controller = controller(on: folder) {
+			controller.showWindow(nil)
+			return controller.window
+		}
+		let controller = makeController(bookmark: bookmark, folder: folder)
+		// A Replica opened before keeps the frame it autosaved.
+		if let window = controller.window, !window.setFrameUsingName(window.frameAutosaveName) {
+			if cascadePoint == .zero {
+				window.center()
+			}
+			cascadePoint = window.cascadeTopLeft(from: cascadePoint)
+		}
+		controller.showWindow(nil)
+		return controller.window
+	}
+
 	/// The window on the Replica in `folder`, standardized, if any.
 	private func controller(on folder: URL) -> ReplicaWindowController? {
 		controllers.first { $0.folder == folder }
@@ -122,7 +178,7 @@ public final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate,
 	private func makeController(bookmark: Data, folder: URL) -> ReplicaWindowController {
 		// Unique per window, as restoration requires, and the same for a Replica each time, so its
 		// window reopens where it last was, laid out as it was.
-		let name = "replica:" + folder.path(percentEncoded: false)
+		let name = Self.replicaWindowPrefix + folder.path(percentEncoded: false)
 		let controller = ReplicaWindowController(
 			autosaveName: name,
 			bookmark: bookmark,
@@ -140,28 +196,9 @@ public final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate,
 	/// Brings forward the window on the Replica in `directory`, opening one if it has none, or
 	/// explains why the Replica can't be opened.
 	private func open(_ directory: URL) {
-		@Dependency(\.bookmarkClient) var bookmarkClient
-		@Dependency(\.replicaClient) var replicaClient
-
 		_Concurrency.Task {
 			do {
-				try await replicaClient.validate(directory)
-				let bookmark = try bookmarkClient.create(directory)
-				let folder = try folder(of: bookmark)
-				NSDocumentController.shared.noteNewRecentDocumentURL(folder)
-				if let controller = controller(on: folder) {
-					controller.showWindow(nil)
-					return
-				}
-				let controller = makeController(bookmark: bookmark, folder: folder)
-				// A Replica opened before keeps the frame it autosaved.
-				if let window = controller.window, !window.setFrameUsingName(window.frameAutosaveName) {
-					if cascadePoint == .zero {
-						window.center()
-					}
-					cascadePoint = window.cascadeTopLeft(from: cascadePoint)
-				}
-				controller.showWindow(nil)
+				try await openWindow(directory)
 			} catch {
 				let alert = NSAlert()
 				alert.messageText = error.localizedDescription
