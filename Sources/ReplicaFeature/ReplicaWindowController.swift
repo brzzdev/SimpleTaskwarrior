@@ -120,7 +120,7 @@ public final class ReplicaWindowController: NSWindowController, NSMenuItemValida
 				store.writeProgress == .saving
 					? String(localized: "Saving…")
 					: store.directory?.path(percentEncoded: false) ?? ""
-			window.title = store.directory?.lastPathComponent ?? ""
+			window.title = store.directory.map { replicaName(of: $0) } ?? ""
 		}
 		observe { [weak self] in
 			self?.updateCommandItems()
