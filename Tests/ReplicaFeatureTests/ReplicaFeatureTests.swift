@@ -2726,8 +2726,8 @@ private struct TaskStreams {
 /// When every test task was entered, so none has aged.
 private let now = Date(timeIntervalSince1970: 1_790_000_000)
 
-/// A task each write that releases what an edit kept moves out of its view, with that view and
-/// the button that writes it.
+/// Each write that releases a task an edit kept: the task, the view it leaves, and the button
+/// that writes it.
 private let releasingWrites: [(StoredTask, TaskView, ReplicaFeature.Action)] = [
 	(
 		storedTask(
