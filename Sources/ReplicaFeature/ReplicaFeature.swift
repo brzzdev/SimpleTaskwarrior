@@ -31,6 +31,9 @@ struct ReplicaFeature {
 		var focusesDescription = false
 		/// Set once the hint that offers Choose Taskrc… has been shown, in any window.
 		@Shared(.appStorage("hasShownTaskrcHint")) var hasShownTaskrcHint = false
+		/// The tags whose tasks the table leaves out, whatever the sidebar selects. The window's own,
+		/// like `sidebarSelection`, so closing it forgets them.
+		var hiddenTags: Set<String> = []
 		/// The task the inspector shows: the one selected task, kept by UUID until the selection
 		/// changes,
 		/// even once it leaves the table.
@@ -239,7 +242,7 @@ struct ReplicaFeature {
 		}
 
 		var sidebar: Sidebar {
-			Sidebar(rows: allRows, selection: sidebarSelection)
+			Sidebar(rows: allRows, selection: sidebarSelection, hiddenTags: hiddenTags)
 		}
 
 		/// Whether a write can start now, rather than queue: not while one is in progress, nor while a
@@ -459,6 +462,9 @@ struct ReplicaFeature {
 		case doneButtonTapped
 		case dontRepairChainButtonTapped
 		case fetchRequested
+		/// ⌥-clicking a tag in the sidebar, choosing Hide or Show Tasks Tagged from its context menu,
+		/// or choosing it from View › Hidden Tags.
+		case hiddenTagToggled(String)
 		/// Return, Tab or clicking away from an inspector field, or choosing from its menu, for the
 		/// tasks
 		/// it showed as you began typing.
@@ -622,6 +628,16 @@ struct ReplicaFeature {
 						}
 					},
 				)
+
+			case let .hiddenTagToggled(tag):
+				// A hidden tag can't be selected, and showing it again doesn't select it.
+				if state.hiddenTags.remove(tag) == nil {
+					state.hiddenTags.insert(tag)
+					state.sidebarSelection.remove(.tag(tag))
+				}
+				state.keptTasks = []
+				filterRows(&state)
+				return .none
 
 			case let .inspectorFieldSubmitted(ids, taskEdit):
 				return edit(ids, taskEdit, &state)
@@ -1430,40 +1446,44 @@ struct ReplicaFeature {
 		return choices
 	}
 
-	/// Resets the sidebar to Pending where it wouldn't show a task New Task would create now.
+	/// Shows a task New Task would create now: shows the hidden tags it would carry again, and resets
+	/// the sidebar to Pending where it wouldn't list it. A New Task that can't be planned shows
+	/// nowhere, so it changes nothing.
 	private func showNewTaskSidebar(_ state: inout State) {
-		guard !sidebarShowsNewTask(state) else {
+		guard let row = newTaskRow(state) else {
 			return
 		}
-		state.sidebarSelection = [.view(.pending)]
+		let carried = state.hiddenTags.intersection(row.task.tags)
+		let isListed = SidebarFilter(state.sidebarSelection).includes(row)
+		guard !carried.isEmpty || !isListed else {
+			return
+		}
+		state.hiddenTags.subtract(carried)
+		if !isListed {
+			state.sidebarSelection = [.view(.pending)]
+		}
 		filterRows(&state)
 	}
 
-	/// Whether the sidebar shows a task New Task would create now, with only the Context's and the
-	/// Taskrc's defaults, never the sidebar's project or tag. A New Task that can't be planned shows
-	/// nowhere, so it changes nothing.
-	private func sidebarShowsNewTask(_ state: State) -> Bool {
+	/// The row of a task New Task would create now, with only the Context's and the Taskrc's
+	/// defaults, never the sidebar's project or tag. Nil where it can't be planned.
+	private func newTaskRow(_ state: State) -> TaskRow? {
 		let taskrc = state.runningTaskrc
 		let id = UUID()
 		guard
 			let plan = try? WritePlanner(taskrc: taskrc, timeZone: timeZone)
-				.plan(.create(id, description: "New Task"), tasks: [:], at: now)
-		else {
-			return true
-		}
-		guard
+				.plan(.create(id, description: "New Task"), tasks: [:], at: now),
 			let properties = plan.applied(to: [:])[id],
 			let task = Models.Task(
 				properties: properties,
 				udaTypes: taskrc.udaTypes,
 				uuid: id.uuidString,
 				workingSetID: nil,
-			),
-			let row = TaskRow(isBlocked: false, task: task, udaColumns: [], urgency: 0, at: now)
+			)
 		else {
-			return true
+			return nil
 		}
-		return SidebarFilter(state.sidebarSelection).includes(row)
+		return TaskRow(isBlocked: false, task: task, udaColumns: [], urgency: 0, at: now)
 	}
 
 	/// Writes the Delete or edit that asked about Series, with the user's choices.
@@ -1523,21 +1543,25 @@ struct ReplicaFeature {
 		sortRows(&state)
 	}
 
-	/// Narrows the ranked rows by the sidebar, then the search, keeping the tasks an edit may have
-	/// moved out. Drops selected tasks that left the table, and inspects the one task a
-	/// selection is narrowed to.
+	/// Narrows the ranked rows by the sidebar and its hidden tags, then the search, keeping the tasks
+	/// an edit may have moved out. Drops selected tasks that left the table, and inspects the one
+	/// task a selection is narrowed to.
 	private func filterRows(_ state: inout State) {
 		// Filtering keeps `allRows`' order, so the table needs no sort of its own.
 		state.rows = IdentifiedArray(
 			uniqueElements: state.allRows.filter { [
 				filter = SidebarFilter(state.sidebarSelection),
+				hidden = state.hiddenTags,
 				kept = state.keptTasks,
 				search = state.searchText,
 			] in
 				guard !state.leavingTasks.contains($0.id) else {
 					return false
 				}
-				return kept.contains($0.id) || filter.includes($0) && $0.matches(search: search)
+				return kept.contains($0.id)
+					|| filter.includes($0)
+					&& $0.task.tags.isDisjoint(with: hidden)
+					&& $0.matches(search: search)
 			},
 		)
 		let selectedCount = state.selection.count

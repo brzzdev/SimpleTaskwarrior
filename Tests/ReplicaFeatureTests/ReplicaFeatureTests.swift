@@ -1432,6 +1432,39 @@ struct ReplicaFeatureTests {
 	}
 
 	@Test
+	func newTaskShowsTheHiddenTagsItWouldCarryAsItOpensAndAsItsSubmitted() async throws {
+		let taskrc = Taskrc(path: taskrcFile.path(), environment: .fixture) { path in
+			Taskrc.File(contents: "context=work\ncontext.work.write=+review\n", realPath: path)
+		}
+		let milk = storedTask(0, "Buy milk", workingSetID: 1, ["tag_review": "x"])
+		var initialState = try loadedState([])
+		initialState.hiddenTags = ["office", "review"]
+		initialState.taskrc = TaskrcClient.Loaded(taskrc: taskrc, url: taskrcFile)
+		let store = TestStore(initialState: initialState) {
+			ReplicaFeature()
+		} withDependencies: {
+			$0.continuousClock = TestClock()
+			$0.date.now = now
+			$0.replicaClient
+				.apply = { _, _, _ in ApplyOutcome(isCommitted: true, snapshot: snapshot([milk])) }
+			$0.timeZone = .gmt
+			$0.uuid = .incrementing
+		}
+		store.exhaustivity = .off
+
+		await store.send(.newTaskButtonTapped) {
+			$0.hiddenTags = ["office"]
+		}
+		await store.send(.hiddenTagToggled("review"))
+		await store.send(.newTaskDescriptionSubmitted("Buy milk")) {
+			$0.hiddenTags = ["office"]
+		}
+		await store.receive(\.writeCommitted)
+		#expect(store.state.rows.map(\.id) == [UUID(0)])
+		#expect(store.state.selection == [UUID(0)])
+	}
+
+	@Test
 	func newTaskWaitsForTheReplicaAndTheTaskrc() async {
 		var initialState = ReplicaFeature.State(bookmark: Data())
 		initialState.directory = replicaDirectory
@@ -2384,7 +2417,7 @@ struct ReplicaFeatureTests {
 			try row(storedTask(seed, "Task \(seed)", workingSetID: seed + 1, seed < 2 ? started : [:]))
 		}
 
-		let sidebar = Sidebar(rows: rows, selection: [])
+		let sidebar = Sidebar(rows: rows, selection: [], hiddenTags: [])
 
 		#expect(
 			sidebar.views.map(\.item)
@@ -2528,7 +2561,11 @@ struct ReplicaFeatureTests {
 			),
 		]
 
-		let sidebar = Sidebar(rows: rows, selection: [.project("Errands"), .tag("bug")])
+		let sidebar = Sidebar(
+			rows: rows,
+			selection: [.project("Errands"), .tag("bug")],
+			hiddenTags: [],
+		)
 
 		#expect(sidebar.views.map(\.count) == [0, 2, 0, 1, 0])
 		#expect(
@@ -2545,6 +2582,53 @@ struct ReplicaFeatureTests {
 			sidebar.tags == [
 				Sidebar.Count(count: 0, item: .tag("bug")),
 				Sidebar.Count(count: 1, item: .tag("phone")),
+			],
+		)
+	}
+
+	@Test
+	func sidebarCountsLeaveOutHiddenTagsAndAHiddenTagCountsWhatItHides() throws {
+		let rows = try [
+			row(storedTask(0, "Chase", workingSetID: 1, ["tag_office": "x", "tag_review": "x"])),
+			row(storedTask(1, "Proofread", workingSetID: 2, ["tag_review": "x"])),
+			row(storedTask(2, "Print", workingSetID: 3, ["project": "Home", "tag_office": "x"])),
+			row(storedTask(3, "Sweep", workingSetID: 4)),
+			row(storedTask(4, "Sign off", workingSetID: 5, ["project": "Home", "tag_review": "x"])),
+			row(
+				storedTask(5, "Approve", status: "completed", workingSetID: nil, ["tag_review": "x"]),
+			),
+		]
+
+		let sidebar = Sidebar(rows: rows, selection: [], hiddenTags: ["review"])
+
+		#expect(sidebar.views.map(\.count) == [0, 2, 0, 0, 0])
+		#expect(sidebar.projects == [Sidebar.Project(children: [], count: 1, name: "Home")])
+		#expect(
+			sidebar.tags == [
+				Sidebar.Count(count: 1, item: .tag("office")),
+				Sidebar.Count(count: 3, item: .tag("review")),
+			],
+		)
+
+		// Both hidden, the task with both counts against each.
+		let both = Sidebar(rows: rows, selection: [], hiddenTags: ["office", "review"])
+
+		#expect(both.views.map(\.count) == [0, 1, 0, 0, 0])
+		#expect(both.projects.isEmpty)
+		#expect(
+			both.tags == [
+				Sidebar.Count(count: 2, item: .tag("office")),
+				Sidebar.Count(count: 3, item: .tag("review")),
+			],
+		)
+
+		// Listed at 0 where no task in the selected views has it.
+		let completed = Sidebar(rows: rows, selection: [.view(.completed)], hiddenTags: ["office"])
+
+		#expect(
+			completed.tags == [
+				Sidebar.Count(count: 0, item: .tag("office")),
+				Sidebar.Count(count: 1, item: .tag("review")),
 			],
 		)
 	}
@@ -2588,6 +2672,79 @@ struct ReplicaFeatureTests {
 			[.project("Home"), .project("Work"), .tag("phone"), .view(.pending), .view(.waiting)],
 		)
 		#expect(descriptions() == ["Call the plumber", "Ring the client"])
+	}
+
+	@Test
+	func hidingATagLeavesOutEveryTaskWithItAndDeselectsOnlyThatTag() async {
+		let store = TestStore(initialState: ReplicaFeature.State(bookmark: Data())) {
+			ReplicaFeature()
+		} withDependencies: {
+			$0.date.now = now
+			$0.timeZone = .gmt
+		}
+		store.exhaustivity = .off
+		await store.send(
+			.tasksLoaded(snapshot([
+				storedTask(0, "Chase the invoice", workingSetID: 1, ["tag_office": "x", "tag_review": "x"]),
+				storedTask(1, "Dig the beds", workingSetID: 2, ["tag_home": "x"]),
+				storedTask(2, "Print the slides", workingSetID: 3, ["tag_office": "x"]),
+				storedTask(3, "Proofread", workingSetID: 4, ["tag_review": "x"]),
+				storedTask(4, "Sweep", workingSetID: 5),
+			])),
+		)
+		let descriptions = { store.state.rows.map(\.task.description).sorted() }
+		await store.send(\.binding.sidebarSelection, [.tag("home"), .tag("office")])
+
+		// Even with a selected tag.
+		await store.send(.hiddenTagToggled("review")) {
+			$0.hiddenTags = ["review"]
+		}
+		#expect(descriptions() == ["Dig the beds", "Print the slides"])
+
+		await store.send(.hiddenTagToggled("office")) {
+			$0.hiddenTags = ["office", "review"]
+			$0.sidebarSelection = [.tag("home")]
+		}
+		#expect(descriptions() == ["Dig the beds"])
+
+		// Shown again, it isn't selected again.
+		await store.send(.hiddenTagToggled("office")) {
+			$0.hiddenTags = ["review"]
+		}
+		#expect(descriptions() == ["Dig the beds"])
+
+		await store.send(\.binding.sidebarSelection, [])
+		await store.send(.hiddenTagToggled("home"))
+		await store.send(.hiddenTagToggled("office"))
+		#expect(descriptions() == ["Sweep"])
+	}
+
+	@Test
+	func hidingATagLetsGoOfTheTasksAnEditKept() async throws {
+		let bike = storedTask(0, "Fix the bike", workingSetID: 1)
+		let taggedBike = storedTask(0, "Fix the bike", workingSetID: 1, ["tag_review": "x"])
+		var initialState = try loadedState([bike], selection: [UUID(0)])
+		initialState.hiddenTags = ["review"]
+		let store = TestStore(initialState: initialState) {
+			ReplicaFeature()
+		} withDependencies: {
+			$0.continuousClock = TestClock()
+			$0.date.now = now
+			$0.replicaClient
+				.apply = { _, _, _ in ApplyOutcome(isCommitted: true, snapshot: snapshot([taggedBike])) }
+			$0.timeZone = .gmt
+		}
+		store.exhaustivity = .off
+
+		await store.send(.inspectorFieldSubmitted([UUID(0)], .addTags(["review"])))
+		await store.receive(\.writeCommitted)
+		#expect(store.state.rows.map(\.id) == [UUID(0)])
+		#expect(store.state.sidebar.views.map(\.count) == [0, 0, 0, 0, 0])
+
+		await store.send(.hiddenTagToggled("office")) {
+			$0.keptTasks = []
+			$0.rows = []
+		}
 	}
 
 	@Test
