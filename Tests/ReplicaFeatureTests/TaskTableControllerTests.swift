@@ -151,7 +151,7 @@ private func expectColumnsFill(
 /// Waits for `condition`, such as the table following the store, which it does on a later turn of
 /// the run loop.
 @MainActor
-private func wait(
+func wait(
 	until condition: () -> Bool,
 	sourceLocation: SourceLocation = #_sourceLocation,
 ) async throws {
