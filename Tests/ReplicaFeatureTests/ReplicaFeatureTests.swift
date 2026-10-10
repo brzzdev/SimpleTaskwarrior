@@ -305,20 +305,20 @@ struct ReplicaFeatureTests {
 	}
 
 	@Test
-	func copiedDescriptionsListTheSelectedTasksOnePerLineInTheTablesOrder() throws {
+	func copyDescriptionCopiesTheSelectedTasksOnePerLineInTheTablesOrder() throws {
 		var state = try loadedState([
 			storedTask(2, "File taxes", workingSetID: 3),
 			storedTask(0, "Buy milk", workingSetID: 1),
 			storedTask(1, "Walk the dog", workingSetID: 2),
 		])
 
-		#expect(state.copiedDescriptions == nil)
+		#expect(state.selectedDescriptions == nil)
 
 		state.selection = [UUID(0)]
-		#expect(state.copiedDescriptions == "Buy milk")
+		#expect(state.selectedDescriptions == "Buy milk")
 
 		state.selection = [UUID(0), UUID(1), UUID(2)]
-		#expect(state.copiedDescriptions == "File taxes\nBuy milk\nWalk the dog")
+		#expect(state.selectedDescriptions == "File taxes\nBuy milk\nWalk the dog")
 	}
 
 	@Test

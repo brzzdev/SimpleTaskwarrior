@@ -64,7 +64,8 @@ final class TaskTableController: NSViewController, NSMenuDelegate, NSMenuItemVal
 		let headerMenu = NSMenu()
 		headerMenu.delegate = self
 		table.headerView?.menu = headerMenu
-		// Aimed at the table, so it copies the descriptions even while a field elsewhere has focus.
+		// Targets this controller, so it copies the descriptions even while a field elsewhere has
+		// focus.
 		let copyItem = NSMenuItem(
 			title: String(localized: "Copy Description"),
 			action: #selector(copy(_:)),
@@ -115,7 +116,7 @@ final class TaskTableController: NSViewController, NSMenuDelegate, NSMenuItemVal
 	/// Edit ▸ Copy reaches this only while the table has focus, since a field takes it first.
 	@objc
 	func copy(_: Any?) {
-		guard let descriptions = store.copiedDescriptions else {
+		guard let descriptions = store.selectedDescriptions else {
 			return
 		}
 		NSPasteboard.general.clearContents()
@@ -200,7 +201,12 @@ final class TaskTableController: NSViewController, NSMenuDelegate, NSMenuItemVal
 		guard menuItem.action == #selector(copy(_:)) else {
 			return true
 		}
-		return store.copiedDescriptions != nil
+		// Opening the new-task row keeps the selection, which right-clicking that row mustn't copy.
+		let clicked = table.clickedRow
+		if menuItem.menu === rowMenu, clicked >= 0, row(at: clicked) == nil {
+			return false
+		}
+		return store.selectedDescriptions != nil
 	}
 
 	/// Adds `tableColumn`, starting fitted to `widestCell` where one is given.
