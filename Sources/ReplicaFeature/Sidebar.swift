@@ -63,7 +63,7 @@ struct Sidebar: Equatable {
 	/// The sidebar over `rows`, keeping every selected and hidden tag and every selected project
 	/// listed, at a count of 0 where no task has it. Every count leaves out the tasks with a hidden
 	/// tag, but a hidden tag's own, which counts the tasks in the selected views it hides.
-	init(rows: [TaskRow], selection: Set<SidebarItem>, hiddenTags: Set<String>) {
+	init(hiddenTags: Set<String>, rows: [TaskRow], selection: Set<SidebarItem>) {
 		let filter = SidebarFilter(selection, hiddenTags: hiddenTags)
 		let shown = rows.filter { !filter.hides($0) }
 		views = TaskView.all.map { view in

@@ -128,14 +128,13 @@ final class SidebarController: NSViewController, NSMenuDelegate, NSOutlineViewDa
 	/// Offers to hide or show a right-clicked tag, and nothing for any other row.
 	func menuNeedsUpdate(_ menu: NSMenu) {
 		menu.removeAllItems()
-		guard
-			let node = outline.item(atRow: outline.clickedRow) as? SidebarNode,
-			case let .tag(tag)? = node.item
-		else {
+		let row = outline.clickedRow
+		guard let tag = outline.tag(atRow: row) else {
 			return
 		}
+		let isHidden = (outline.item(atRow: row) as? SidebarNode)?.isHidden == true
 		let item = NSMenuItem(
-			title: node.isHidden
+			title: isHidden
 				? String(localized: "Show Tasks Tagged “\(tag)”")
 				: String(localized: "Hide Tasks Tagged “\(tag)”"),
 			action: #selector(hiddenTagMenuItemChosen(_:)),
@@ -418,7 +417,8 @@ private final class ItemCell: NSTableCellView {
 		}
 		imageView?.image = NSImage(
 			systemSymbolName: isHidden ? "tag.slash" : item.symbolName,
-			accessibilityDescription: nil,
+			// VoiceOver's only cue, since the strikethrough is visual alone.
+			accessibilityDescription: isHidden ? String(localized: "Hidden") : nil,
 		)
 		imageView?.contentTintColor = isHidden ? .secondaryLabelColor : nil
 		guard let textField else {
@@ -465,15 +465,24 @@ private let symbolWidth: CGFloat = 20
 private final class SidebarOutlineView: NSOutlineView {
 	var tagOptionClicked: (String) -> Void = { _ in }
 
+	/// Each click of an ⌥-double-click arrives here, and a second would undo the first.
 	override func mouseDown(with event: NSEvent) {
-		let row = row(at: convert(event.locationInWindow, from: nil))
 		guard
 			event.modifierFlags.contains(.option),
-			case let .tag(tag)? = (item(atRow: row) as? SidebarNode)?.item
+			event.clickCount == 1,
+			let tag = tag(atRow: row(at: convert(event.locationInWindow, from: nil)))
 		else {
 			super.mouseDown(with: event)
 			return
 		}
 		tagOptionClicked(tag)
+	}
+
+	/// The tag `row` lists, or nil for any other row, or none.
+	func tag(atRow row: Int) -> String? {
+		guard case let .tag(tag)? = (item(atRow: row) as? SidebarNode)?.item else {
+			return nil
+		}
+		return tag
 	}
 }

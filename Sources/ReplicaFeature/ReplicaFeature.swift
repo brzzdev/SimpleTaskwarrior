@@ -242,7 +242,7 @@ struct ReplicaFeature {
 		}
 
 		var sidebar: Sidebar {
-			Sidebar(rows: allRows, selection: sidebarSelection, hiddenTags: hiddenTags)
+			Sidebar(hiddenTags: hiddenTags, rows: allRows, selection: sidebarSelection)
 		}
 
 		/// Whether a write can start now, rather than queue: not while one is in progress, nor while a
@@ -1465,7 +1465,10 @@ struct ReplicaFeature {
 		guard !carried.isEmpty || !isListed else {
 			return
 		}
-		state.hiddenTags.subtract(carried)
+		if !carried.isEmpty {
+			state.hiddenTags.subtract(carried)
+			state.keptTasks = []
+		}
 		if !isListed {
 			state.sidebarSelection = [.view(.pending)]
 		}

@@ -1439,6 +1439,7 @@ struct ReplicaFeatureTests {
 		let milk = storedTask(0, "Buy milk", workingSetID: 1, ["tag_review": "x"])
 		var initialState = try loadedState([])
 		initialState.hiddenTags = ["office", "review"]
+		initialState.keptTasks = [UUID(5)]
 		initialState.taskrc = TaskrcClient.Loaded(taskrc: taskrc, url: taskrcFile)
 		let store = TestStore(initialState: initialState) {
 			ReplicaFeature()
@@ -1454,6 +1455,7 @@ struct ReplicaFeatureTests {
 
 		await store.send(.newTaskButtonTapped) {
 			$0.hiddenTags = ["office"]
+			$0.keptTasks = []
 		}
 		await store.send(.hiddenTagToggled("review"))
 		await store.send(.newTaskDescriptionSubmitted("Buy milk")) {
@@ -2417,7 +2419,7 @@ struct ReplicaFeatureTests {
 			try row(storedTask(seed, "Task \(seed)", workingSetID: seed + 1, seed < 2 ? started : [:]))
 		}
 
-		let sidebar = Sidebar(rows: rows, selection: [], hiddenTags: [])
+		let sidebar = Sidebar(hiddenTags: [], rows: rows, selection: [])
 
 		#expect(
 			sidebar.views.map(\.item)
@@ -2562,9 +2564,9 @@ struct ReplicaFeatureTests {
 		]
 
 		let sidebar = Sidebar(
+			hiddenTags: [],
 			rows: rows,
 			selection: [.project("Errands"), .tag("bug")],
-			hiddenTags: [],
 		)
 
 		#expect(sidebar.views.map(\.count) == [0, 2, 0, 1, 0])
@@ -2599,7 +2601,7 @@ struct ReplicaFeatureTests {
 			),
 		]
 
-		let sidebar = Sidebar(rows: rows, selection: [], hiddenTags: ["review"])
+		let sidebar = Sidebar(hiddenTags: ["review"], rows: rows, selection: [])
 
 		#expect(sidebar.views.map(\.count) == [0, 2, 0, 0, 0])
 		#expect(sidebar.projects == [Sidebar.Project(children: [], count: 1, name: "Home")])
@@ -2611,7 +2613,7 @@ struct ReplicaFeatureTests {
 		)
 
 		// Both hidden, the task with both counts against each.
-		let both = Sidebar(rows: rows, selection: [], hiddenTags: ["office", "review"])
+		let both = Sidebar(hiddenTags: ["office", "review"], rows: rows, selection: [])
 
 		#expect(both.views.map(\.count) == [0, 1, 0, 0, 0])
 		#expect(both.projects.isEmpty)
@@ -2623,7 +2625,7 @@ struct ReplicaFeatureTests {
 		)
 
 		// Listed at 0 where no task in the selected views has it.
-		let completed = Sidebar(rows: rows, selection: [.view(.completed)], hiddenTags: ["office"])
+		let completed = Sidebar(hiddenTags: ["office"], rows: rows, selection: [.view(.completed)])
 
 		#expect(
 			completed.tags == [

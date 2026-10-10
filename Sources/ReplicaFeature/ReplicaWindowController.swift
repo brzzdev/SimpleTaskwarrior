@@ -184,6 +184,12 @@ public final class ReplicaWindowController: NSWindowController, NSMenuItemValida
 		state.decodeObject(of: NSData.self, forKey: bookmarkKey) as Data?
 	}
 
+	/// View › Hidden Tags, whose items hide or show again a tag's tasks. They have no key
+	/// equivalents, since the tags change with the Replica.
+	public static func hiddenTagsMenuItem() -> NSMenuItem {
+		submenuItem(String(localized: "Hidden Tags"), delegate: hiddenTagsMenuDelegate)
+	}
+
 	/// The task commands, then Set Project…, the tag commands, the dependency commands and Remove
 	/// Annotation, as the menu bar's Task menu and a row's context menu list them. An uppercase key
 	/// equivalent adds ⇧,
@@ -214,12 +220,6 @@ public final class ReplicaWindowController: NSWindowController, NSMenuItemValida
 			.separator(),
 			submenuItem(String(localized: "Remove Annotation"), delegate: removeAnnotationMenuDelegate),
 		]
-	}
-
-	/// View › Hidden Tags, whose items hide or show again a tag's tasks. They have no key
-	/// equivalents, since the tags change with the Replica.
-	public static func hiddenTagsMenuItem() -> NSMenuItem {
-		submenuItem(String(localized: "Hidden Tags"), delegate: hiddenTagsMenuDelegate)
 	}
 
 	/// Opens the menu of tasks the inspected task can come to depend on.
