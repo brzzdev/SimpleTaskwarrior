@@ -122,6 +122,8 @@ func mainMenu(
 		menuItem("Completed", #selector(ReplicaWindowController.showCompleted(_:)), key: "4"),
 		menuItem("Deleted", #selector(ReplicaWindowController.showDeleted(_:)), key: "5"),
 		.separator(),
+		ReplicaWindowController.hiddenTagsMenuItem(),
+		.separator(),
 		menuItem(
 			"Show Sidebar",
 			#selector(NSSplitViewController.toggleSidebar(_:)),

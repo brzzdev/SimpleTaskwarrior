@@ -42,6 +42,8 @@ enum SidebarItem: Hashable {
 struct Sidebar: Equatable {
 	struct Count: Equatable {
 		var count: Int
+		/// A hidden tag, which the table leaves the tasks of out.
+		var isHidden = false
 		var item: SidebarItem
 	}
 
@@ -58,14 +60,16 @@ struct Sidebar: Equatable {
 	var tags: [Count]
 	var views: [Count]
 
-	/// The sidebar over `rows`, keeping every selected project and tag listed, at a count of 0 where
-	/// no task has it.
-	init(rows: [TaskRow], selection: Set<SidebarItem>) {
+	/// The sidebar over `rows`, keeping every selected and hidden tag and every selected project
+	/// listed, at a count of 0 where no task has it. Every count leaves out the tasks with a hidden
+	/// tag, but a hidden tag's own, which counts the tasks in the selected views it hides.
+	init(hiddenTags: Set<String>, rows: [TaskRow], selection: Set<SidebarItem>) {
+		let filter = SidebarFilter(selection, hiddenTags: hiddenTags)
+		let shown = rows.filter { !filter.hides($0) }
 		views = TaskView.all.map { view in
-			Count(count: rows.count { $0.views.contains(view) }, item: .view(view))
+			Count(count: shown.count { $0.views.contains(view) }, item: .view(view))
 		}
-		let filter = SidebarFilter(selection)
-		let listed = rows.filter(filter.isInSelectedViews)
+		let listed = shown.filter(filter.isInSelectedViews)
 
 		var projectCounts = zeroCounts(filter.projects.flatMap(\.ancestry))
 		for name in listed.compactMap(\.task.project).flatMap(\.ancestry) {
@@ -77,7 +81,13 @@ struct Sidebar: Equatable {
 		for tag in listed.flatMap(\.task.tags) {
 			tagCounts[tag, default: 0] += 1
 		}
-		tags = byName(tagCounts).map { Count(count: $0.value, item: .tag($0.key)) }
+		let inSelectedViews = rows.filter(filter.isInSelectedViews)
+		for tag in hiddenTags {
+			tagCounts[tag] = inSelectedViews.count { $0.task.tags.contains(tag) }
+		}
+		tags = byName(tagCounts).map {
+			Count(count: $0.value, isHidden: hiddenTags.contains($0.key), item: .tag($0.key))
+		}
 	}
 }
 
@@ -91,14 +101,17 @@ extension Sidebar.Project {
 	}
 }
 
-/// The sidebar's selection, split by section once rather than for every row it narrows.
+/// The sidebar's selection, split by section once rather than for every row it narrows, and the
+/// tags it hides.
 struct SidebarFilter {
+	var hiddenTags: Set<String>
 	var projects: [String] = []
 	var tags: [String] = []
 	/// The selected fixed views, or Pending when none is selected.
 	var views: Set<TaskView> = []
 
-	init(_ selection: Set<SidebarItem>) {
+	init(_ selection: Set<SidebarItem>, hiddenTags: Set<String> = []) {
+		self.hiddenTags = hiddenTags
 		for item in selection {
 			switch item {
 			case let .project(project): projects.append(project)
@@ -111,10 +124,16 @@ struct SidebarFilter {
 		}
 	}
 
-	/// Whether `row` shows: in any selected view, and in any selected project and with any selected
-	/// tag where those sections have some selected.
+	/// Whether `row` has a hidden tag, which leaves it out whatever the selection.
+	func hides(_ row: TaskRow) -> Bool {
+		!row.task.tags.isDisjoint(with: hiddenTags)
+	}
+
+	/// Whether `row` shows: with no hidden tag, in any selected view, and in any selected project
+	/// and with any selected tag where those sections have some selected.
 	func includes(_ row: TaskRow) -> Bool {
-		isInSelectedViews(row)
+		!hides(row)
+			&& isInSelectedViews(row)
 			&& (projects.isEmpty || projects.contains(where: row.task.isIn(project:)))
 			&& (tags.isEmpty || tags.contains(where: row.task.tags.contains))
 	}
