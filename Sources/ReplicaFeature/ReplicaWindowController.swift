@@ -250,6 +250,12 @@ public final class ReplicaWindowController: NSWindowController, NSMenuItemValida
 		guard openPanel == nil, let window else {
 			return
 		}
+		#if DEBUG
+		if let directory = PanelOverride.take() {
+			locate(directory)
+			return
+		}
+		#endif
 		let panel = NSOpenPanel()
 		panel.canChooseDirectories = true
 		panel.canChooseFiles = false
@@ -664,6 +670,12 @@ public final class ReplicaWindowController: NSWindowController, NSMenuItemValida
 		guard openPanel == nil, let window else {
 			return
 		}
+		#if DEBUG
+		if let file = PanelOverride.take() {
+			store.send(.taskrcChosen(file))
+			return
+		}
+		#endif
 		let panel = NSOpenPanel()
 		// Files, and the symlinks dotfile managers make of them. Folders and packages are neither.
 		panel.allowedContentTypes = [.data, .symbolicLink]
