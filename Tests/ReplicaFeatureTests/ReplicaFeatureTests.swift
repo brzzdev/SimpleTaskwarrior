@@ -2606,7 +2606,7 @@ struct ReplicaFeatureTests {
 		#expect(
 			sidebar.tags == [
 				Sidebar.Count(count: 1, item: .tag("office")),
-				Sidebar.Count(count: 3, item: .tag("review")),
+				Sidebar.Count(count: 3, isHidden: true, item: .tag("review")),
 			],
 		)
 
@@ -2617,8 +2617,8 @@ struct ReplicaFeatureTests {
 		#expect(both.projects.isEmpty)
 		#expect(
 			both.tags == [
-				Sidebar.Count(count: 2, item: .tag("office")),
-				Sidebar.Count(count: 3, item: .tag("review")),
+				Sidebar.Count(count: 2, isHidden: true, item: .tag("office")),
+				Sidebar.Count(count: 3, isHidden: true, item: .tag("review")),
 			],
 		)
 
@@ -2627,7 +2627,7 @@ struct ReplicaFeatureTests {
 
 		#expect(
 			completed.tags == [
-				Sidebar.Count(count: 0, item: .tag("office")),
+				Sidebar.Count(count: 0, isHidden: true, item: .tag("office")),
 				Sidebar.Count(count: 1, item: .tag("review")),
 			],
 		)
@@ -2700,6 +2700,11 @@ struct ReplicaFeatureTests {
 			$0.hiddenTags = ["review"]
 		}
 		#expect(descriptions() == ["Dig the beds", "Print the slides"])
+
+		// A hidden tag can't be selected.
+		await store.send(\.binding.sidebarSelection, [.tag("home"), .tag("office"), .tag("review")]) {
+			$0.sidebarSelection = [.tag("home"), .tag("office")]
+		}
 
 		await store.send(.hiddenTagToggled("office")) {
 			$0.hiddenTags = ["office", "review"]

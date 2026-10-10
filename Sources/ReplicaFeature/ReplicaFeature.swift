@@ -560,7 +560,14 @@ struct ReplicaFeature {
 				// Should it queue, `finishWrite` gives it its entry again as it starts.
 				return edit([id], .addAnnotation(text, entry: annotationEntry(for: id, state)), &state)
 
-			case .binding(\.searchText), .binding(\.sidebarSelection):
+			case .binding(\.searchText):
+				state.keptTasks = []
+				filterRows(&state)
+				return .none
+
+			case .binding(\.sidebarSelection):
+				// The sidebar doesn't offer a hidden tag to select.
+				state.sidebarSelection.subtract(state.hiddenTags.map(SidebarItem.tag))
 				state.keptTasks = []
 				filterRows(&state)
 				return .none
@@ -1550,18 +1557,14 @@ struct ReplicaFeature {
 		// Filtering keeps `allRows`' order, so the table needs no sort of its own.
 		state.rows = IdentifiedArray(
 			uniqueElements: state.allRows.filter { [
-				filter = SidebarFilter(state.sidebarSelection),
-				hidden = state.hiddenTags,
+				filter = SidebarFilter(state.sidebarSelection, hiddenTags: state.hiddenTags),
 				kept = state.keptTasks,
 				search = state.searchText,
 			] in
 				guard !state.leavingTasks.contains($0.id) else {
 					return false
 				}
-				return kept.contains($0.id)
-					|| filter.includes($0)
-					&& $0.task.tags.isDisjoint(with: hidden)
-					&& $0.matches(search: search)
+				return kept.contains($0.id) || filter.includes($0) && $0.matches(search: search)
 			},
 		)
 		let selectedCount = state.selection.count

@@ -217,8 +217,7 @@ public final class ReplicaWindowController: NSWindowController, NSMenuItemValida
 	}
 
 	/// View › Hidden Tags, whose items hide or show again a tag's tasks. They have no key
-	/// equivalents,
-	/// since the tags change with the Replica.
+	/// equivalents, since the tags change with the Replica.
 	public static func hiddenTagsMenuItem() -> NSMenuItem {
 		submenuItem(String(localized: "Hidden Tags"), delegate: hiddenTagsMenuDelegate)
 	}
@@ -786,6 +785,16 @@ private final class ValueMenuDelegate: NSObject, NSMenuDelegate {
 		self.action = action
 		self.emptyTitle = emptyTitle
 		self.items = items
+	}
+
+	/// None, so AppKit needn't fill the menu to search it for one on every key equivalent.
+	func menuHasKeyEquivalent(
+		_: NSMenu,
+		for _: NSEvent,
+		target _: AutoreleasingUnsafeMutablePointer<AnyObject?>,
+		action _: UnsafeMutablePointer<Selector?>,
+	) -> Bool {
+		false
 	}
 
 	func menuNeedsUpdate(_ menu: NSMenu) {

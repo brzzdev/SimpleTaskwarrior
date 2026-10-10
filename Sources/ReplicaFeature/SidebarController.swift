@@ -163,7 +163,7 @@ final class SidebarController: NSViewController, NSMenuDelegate, NSOutlineViewDa
 	}
 
 	/// Leaves out the section headers and hidden tags, and leaves the selection as it was where
-	/// that's all a click proposed.
+	/// that's all a click proposed. Unlike `shouldSelectItem`, this gates Select All too.
 	func outlineView(
 		_: NSOutlineView,
 		selectionIndexesForProposedSelection proposed: IndexSet,
@@ -308,14 +308,8 @@ private final class SidebarNode {
 			sections.append(
 				SidebarNode(
 					title: String(localized: "Tags"),
-					children: sidebar.tags.map { tag in
-						let isHidden =
-							if case let .tag(name) = tag.item {
-								sidebar.hiddenTags.contains(name)
-							} else {
-								false
-							}
-						return SidebarNode(tag.item, count: tag.count, isHidden: isHidden)
+					children: sidebar.tags.map {
+						SidebarNode($0.item, count: $0.count, isHidden: $0.isHidden)
 					},
 				),
 			)
