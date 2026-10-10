@@ -1,3 +1,4 @@
+import BookmarkClient
 public import Foundation
 
 /// The name a Replica goes by in its window title and in Open Recent.
@@ -12,8 +13,7 @@ public func replicaName(of directory: URL, home: URL = .homeDirectory) -> String
 		return name
 	}
 	let parent = directory.deletingLastPathComponent()
-	guard parent.standardizedFileURL.pathComponents != home.standardizedFileURL.pathComponents
-	else {
+	guard standardizedFolder(parent) != standardizedFolder(home) else {
 		return name
 	}
 	return fileManager.displayName(atPath: parent.path(percentEncoded: false))
