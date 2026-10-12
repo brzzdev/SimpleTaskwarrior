@@ -34,6 +34,7 @@ $H context "$F" Priority               # toggles a column in the header's menu
 $H click "$F" 2                        # selects table row 2 (from 0)
 $H context "$F" Delete 1               # an item in the menu on row 1, "Pay rent", which repeats…
 $H sheet "$F" Delete                   # …so a sheet asks, and this answers it
+$H menu "$F" Task "Snooze › Tomorrow"  # " › " walks into a submenu
 $H key "$F" n command                  # ⌘N; key equivalents go through their menu item
 $H type "$F" "Buy milk"                # into the first responder
 $H key "$F" $'\r'

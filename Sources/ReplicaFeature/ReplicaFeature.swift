@@ -184,6 +184,7 @@ struct ReplicaFeature {
 			let isPending = tasks.allSatisfy { $0.status == .pending }
 			if isPending {
 				commands.insert(.done)
+				commands.insert(.snooze)
 			}
 			if tasks.allSatisfy({ $0.status == .completed || $0.status == .deleted }) {
 				commands.insert(.markPending)
@@ -192,6 +193,11 @@ struct ReplicaFeature {
 				commands.insert(.startStop)
 			}
 			return commands
+		}
+
+		/// Whether Unsnooze applies: where Snooze does and a selected task is waiting.
+		var canUnsnooze: Bool {
+			enabledCommands.contains(.snooze) && !selectedWaitingIDs.isEmpty
 		}
 
 		/// Whether the window has a Taskrc, rather than running on TW's defaults.
@@ -260,6 +266,11 @@ struct ReplicaFeature {
 			Set(selectedTasks().flatMap(\.tags)).sorted()
 		}
 
+		/// The selected tasks that are waiting, which Unsnooze writes, in the table's order.
+		var selectedWaitingIDs: [Models.Task.ID] {
+			selectedIDs.filter { rows[id: $0]?.views.contains(.waiting) == true }
+		}
+
 		var sidebar: Sidebar {
 			Sidebar(hiddenTags: hiddenTags, rows: allRows, selection: sidebarSelection)
 		}
@@ -296,6 +307,12 @@ struct ReplicaFeature {
 			}
 		}
 
+		/// Whether `command`'s menu items are enabled. The menu keeps the commands Mark Pending
+		/// replaces, disabled, where the toolbar hides them.
+		func isMenuEnabled(_ command: TaskCommand) -> Bool {
+			enabledCommands.contains(command) && isOffered(command)
+		}
+
 		/// Whether the toolbar and a row's context menu list `command`. Mark Pending takes the place of
 		/// the others where every selected fixed view is Completed or Deleted.
 		func isOffered(_ command: TaskCommand) -> Bool {
@@ -305,13 +322,13 @@ struct ReplicaFeature {
 			return (command == .markPending) == offersMarkPending
 		}
 
-		private func isStopping(_ tasks: [Models.Task]) -> Bool {
-			!tasks.isEmpty && tasks.allSatisfy { $0.start != nil }
+		/// The selected tasks, in no particular order.
+		func selectedTasks() -> [Models.Task] {
+			selection.compactMap { rows[id: $0]?.task }
 		}
 
-		/// The selected tasks, in no particular order.
-		private func selectedTasks() -> [Models.Task] {
-			selection.compactMap { rows[id: $0]?.task }
+		private func isStopping(_ tasks: [Models.Task]) -> Bool {
+			!tasks.isEmpty && tasks.allSatisfy { $0.start != nil }
 		}
 	}
 
@@ -320,7 +337,23 @@ struct ReplicaFeature {
 		case delete
 		case done
 		case markPending
+		/// Opens a menu of dates to wait until, whose items send their own actions.
+		case snooze
 		case startStop
+	}
+
+	/// A Snooze menu item's date, which a task waits until.
+	enum SnoozePreset {
+		case nextWeek
+		case tomorrow
+
+		/// The `wait` it sets, in Taskwarrior's syntax.
+		var input: String {
+			switch self {
+			case .nextWeek: "monday"
+			case .tomorrow: "tomorrow"
+			}
+		}
 	}
 
 	/// A Done or Delete that would break dependency chains, as `dependency.confirmation` asks about.
@@ -481,6 +514,9 @@ struct ReplicaFeature {
 		/// Cancel in the sheet asking whether to repair dependency chains.
 		case chainRepairDismissed
 		case chooseTaskrcButtonTapped
+		/// The Snooze button in the sheet Snooze › Custom… opens, with the date typed, in
+		/// Taskwarrior's syntax.
+		case customSnoozeDateSubmitted(String)
 		case dataLocationBannerCloseButtonTapped
 		case deleteButtonTapped
 		case dependencyChosen(Models.Task.ID, dependency: Models.Task.ID)
@@ -530,6 +566,7 @@ struct ReplicaFeature {
 		case seriesDeleteButtonTapped
 		/// Cancel in the sheet asking whether a write takes each Series.
 		case seriesPromptDismissed
+		case snoozeMenuItemSelected(SnoozePreset)
 		/// A column header was clicked, or the table restored the Replica's sort.
 		case sortOrderChanged([TaskSort])
 		case startStopButtonTapped
@@ -546,6 +583,7 @@ struct ReplicaFeature {
 		case tryAgainButtonTapped
 		case undoButtonTapped
 		case undoOrRedoFinished(UndoOutcome)
+		case unsnoozeMenuItemSelected
 		case useTaskwarriorDefaultsButtonTapped
 		case writeCommitted
 		case writeFailed(WriteFailure)
@@ -618,6 +656,9 @@ struct ReplicaFeature {
 			case .chooseTaskrcButtonTapped:
 				state.isTaskrcPanelPresented = true
 				return .none
+
+			case let .customSnoozeDateSubmitted(text):
+				return snooze(until: text, &state)
 
 			case .dataLocationBannerCloseButtonTapped:
 				guard let dismissal = state.dataLocationDismissal else {
@@ -839,6 +880,9 @@ struct ReplicaFeature {
 				// Starts any edit that queued behind the question.
 				return finishWrite(&state)
 
+			case let .snoozeMenuItemSelected(preset):
+				return snooze(until: preset.input, &state)
+
 			case let .sortOrderChanged(sortOrder):
 				state.sortOrder = sortOrder
 				sortRows(&state)
@@ -913,6 +957,12 @@ struct ReplicaFeature {
 					return finish
 				}
 				return .merge(.run { _ in NSSound.beep() }, finish)
+
+			case .unsnoozeMenuItemSelected:
+				guard state.canUnsnooze else {
+					return .none
+				}
+				return writeWait(state.selectedWaitingIDs, until: "", &state)
 
 			case .useTaskwarriorDefaultsButtonTapped:
 				state.isTaskrcHintPresented = false
@@ -1413,6 +1463,10 @@ struct ReplicaFeature {
 		case .markPending:
 			return write(.markPending(ids), &state)
 
+		case .snooze:
+			// Its menu's items say when until, each through `snooze(until:)`.
+			return .none
+
 		case .startStop:
 			guard state.isStopping else {
 				return write(.start(ids), &state)
@@ -1430,6 +1484,14 @@ struct ReplicaFeature {
 	) -> [WritePlan.RepairedChain] {
 		let planner = WritePlanner(taskrc: state.runningTaskrc, timeZone: timeZone)
 		return (try? planner.plan(action, tasks: tasks, at: now).repairedChains) ?? []
+	}
+
+	/// Has every selected task wait until `text`, in Taskwarrior's syntax.
+	private func snooze(until text: String, _ state: inout State) -> Effect<Action> {
+		guard state.enabledCommands.contains(.snooze) else {
+			return .none
+		}
+		return writeWait(state.selectedIDs, until: text, &state)
 	}
 
 	/// Selects the task `offset` rows from the inspected one, as ⌘⌥↑ and ⌘⌥↓ do.
@@ -1552,6 +1614,21 @@ struct ReplicaFeature {
 		case let .edit(edit):
 			return startWrite(.edit(prompt.ids, edit, series: prompt.series), at: now, &state)
 		}
+	}
+
+	/// Writes `wait` as `text` to the tasks `ids`, as an inspector Wait edit does, asking the same
+	/// Series question. Unlike that edit, it releases them from the table, even where an earlier edit
+	/// kept them, so they leave Pending or Waiting once the write commits. A write that fails keeps
+	/// them.
+	private func writeWait(
+		_ ids: [Models.Task.ID],
+		until text: String,
+		_ state: inout State,
+	) -> Effect<Action> {
+		// Snooze and Unsnooze start only where nothing else is writing or asking, so nothing else is
+		// releasing.
+		state.releasingTasks = Set(ids)
+		return write(.edit(ids, .setInput("wait", text: text)), &state)
 	}
 
 	/// Ranks the Replica's tasks with the Taskrc the window runs on, decoding their UDAs, computing
