@@ -364,6 +364,35 @@ struct ReplicaFeatureTests {
 	}
 
 	@Test
+	func snoozingATaskAnEditKeptDropsItFromPendingOnceItCommits() async throws {
+		let milk = storedTask(0, "Buy milk", workingSetID: 1)
+		let plans = LockIsolated<[WritePlan]>([])
+		var initialState = try loadedState([milk], selection: [UUID(0)])
+		initialState.sidebarSelection = [.view(.pending)]
+		let store = TestStore(initialState: initialState) {
+			ReplicaFeature()
+		} withDependencies: {
+			$0.continuousClock = TestClock()
+			$0.date.now = now
+			$0.replicaClient.apply = applying([milk], plans: plans)
+			$0.timeZone = .gmt
+		}
+		store.exhaustivity = .off(showSkippedAssertions: false)
+
+		await store.send(.inspectorFieldSubmitted([UUID(0)], .set("project", .string("Home"))))
+		await store.receive(\.writeCommitted)
+		#expect(store.state.keptTasks == [UUID(0)])
+
+		await store.send(.snoozeMenuItemSelected(.tomorrow))
+		await store.receive(\.writeCommitted)
+
+		#expect(store.state.keptTasks.isEmpty)
+		#expect(store.state.rows.isEmpty)
+		#expect(store.state.sidebar.views.map(\.count) == [0, 0, 1, 0, 0])
+		await store.finish()
+	}
+
+	@Test
 	func snoozingUntilACustomDateWritesItAsTheInspectorsWaitWould() async throws {
 		let milk = storedTask(0, "Buy milk", workingSetID: 1)
 		let plans = LockIsolated<[WritePlan]>([])

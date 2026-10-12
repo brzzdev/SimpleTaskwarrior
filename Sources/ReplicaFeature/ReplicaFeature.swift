@@ -962,7 +962,7 @@ struct ReplicaFeature {
 				guard state.canUnsnooze else {
 					return .none
 				}
-				return write(.edit(state.selectedWaitingIDs, .setInput("wait", text: "")), &state)
+				return writeWait(state.selectedWaitingIDs, "", &state)
 
 			case .useTaskwarriorDefaultsButtonTapped:
 				state.isTaskrcHintPresented = false
@@ -1486,14 +1486,12 @@ struct ReplicaFeature {
 		return (try? planner.plan(action, tasks: tasks, at: now).repairedChains) ?? []
 	}
 
-	/// Has every selected task wait until `text`, in Taskwarrior's syntax, as an inspector Wait edit
-	/// does, asking the same Series question. Unlike one, it doesn't keep them in the table, so they
-	/// leave Pending for Waiting once it commits.
+	/// Has every selected task wait until `text`, in Taskwarrior's syntax.
 	private func snooze(until text: String, _ state: inout State) -> Effect<Action> {
 		guard state.enabledCommands.contains(.snooze) else {
 			return .none
 		}
-		return write(.edit(state.selectedIDs, .setInput("wait", text: text)), &state)
+		return writeWait(state.selectedIDs, text, &state)
 	}
 
 	/// Selects the task `offset` rows from the inspected one, as ⌘⌥↑ and ⌘⌥↓ do.
@@ -1592,6 +1590,20 @@ struct ReplicaFeature {
 			return nil
 		}
 		return TaskRow(isBlocked: false, task: task, udaColumns: [], urgency: 0, at: now)
+	}
+
+	/// Writes `wait` as `text` to the tasks `ids`, as an inspector Wait edit does, asking the same
+	/// Series question. Unlike one, it releases them from the table, even where an earlier edit kept
+	/// them, so they leave Pending or Waiting once it commits. One that fails keeps them.
+	private func writeWait(
+		_ ids: [Models.Task.ID],
+		_ text: String,
+		_ state: inout State,
+	) -> Effect<Action> {
+		// Snooze and Unsnooze start only where nothing else is writing or asking, so nothing else is
+		// releasing.
+		state.releasingTasks = Set(ids)
+		return write(.edit(ids, .setInput("wait", text: text)), &state)
 	}
 
 	/// Writes the Delete or edit that asked about Series, with the user's choices.
