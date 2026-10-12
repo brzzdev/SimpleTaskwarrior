@@ -184,6 +184,7 @@ struct ReplicaFeature {
 			let isPending = tasks.allSatisfy { $0.status == .pending }
 			if isPending {
 				commands.insert(.done)
+				commands.insert(.snooze)
 			}
 			if tasks.allSatisfy({ $0.status == .completed || $0.status == .deleted }) {
 				commands.insert(.markPending)
@@ -192,6 +193,11 @@ struct ReplicaFeature {
 				commands.insert(.startStop)
 			}
 			return commands
+		}
+
+		/// Whether Unsnooze applies: where Snooze does and a selected task is waiting.
+		var canUnsnooze: Bool {
+			enabledCommands.contains(.snooze) && selectedRows().contains { $0.views.contains(.waiting) }
 		}
 
 		/// Whether the window has a Taskrc, rather than running on TW's defaults.
@@ -309,9 +315,14 @@ struct ReplicaFeature {
 			!tasks.isEmpty && tasks.allSatisfy { $0.start != nil }
 		}
 
+		/// The selected rows, in no particular order.
+		private func selectedRows() -> [TaskRow] {
+			selection.compactMap { rows[id: $0] }
+		}
+
 		/// The selected tasks, in no particular order.
 		private func selectedTasks() -> [Models.Task] {
-			selection.compactMap { rows[id: $0]?.task }
+			selectedRows().map(\.task)
 		}
 	}
 
@@ -320,7 +331,23 @@ struct ReplicaFeature {
 		case delete
 		case done
 		case markPending
+		/// Opens a menu of dates to wait until, whose items send their own actions.
+		case snooze
 		case startStop
+	}
+
+	/// A Snooze menu item's date, which a task waits until.
+	enum SnoozePreset {
+		case nextWeek
+		case tomorrow
+
+		/// The `wait` it sets, in Taskwarrior's syntax.
+		var input: String {
+			switch self {
+			case .nextWeek: "monday"
+			case .tomorrow: "tomorrow"
+			}
+		}
 	}
 
 	/// A Done or Delete that would break dependency chains, as `dependency.confirmation` asks about.
@@ -481,6 +508,9 @@ struct ReplicaFeature {
 		/// Cancel in the sheet asking whether to repair dependency chains.
 		case chainRepairDismissed
 		case chooseTaskrcButtonTapped
+		/// The Snooze button in the sheet Snooze › Custom… opens, with the date typed, in
+		/// Taskwarrior's syntax.
+		case customSnoozeDateSubmitted(String)
 		case dataLocationBannerCloseButtonTapped
 		case deleteButtonTapped
 		case dependencyChosen(Models.Task.ID, dependency: Models.Task.ID)
@@ -530,6 +560,7 @@ struct ReplicaFeature {
 		case seriesDeleteButtonTapped
 		/// Cancel in the sheet asking whether a write takes each Series.
 		case seriesPromptDismissed
+		case snoozeMenuItemSelected(SnoozePreset)
 		/// A column header was clicked, or the table restored the Replica's sort.
 		case sortOrderChanged([TaskSort])
 		case startStopButtonTapped
@@ -546,6 +577,7 @@ struct ReplicaFeature {
 		case tryAgainButtonTapped
 		case undoButtonTapped
 		case undoOrRedoFinished(UndoOutcome)
+		case unsnoozeMenuItemSelected
 		case useTaskwarriorDefaultsButtonTapped
 		case writeCommitted
 		case writeFailed(WriteFailure)
@@ -618,6 +650,9 @@ struct ReplicaFeature {
 			case .chooseTaskrcButtonTapped:
 				state.isTaskrcPanelPresented = true
 				return .none
+
+			case let .customSnoozeDateSubmitted(text):
+				return snooze(until: text, &state)
 
 			case .dataLocationBannerCloseButtonTapped:
 				guard let dismissal = state.dataLocationDismissal else {
@@ -839,6 +874,9 @@ struct ReplicaFeature {
 				// Starts any edit that queued behind the question.
 				return finishWrite(&state)
 
+			case let .snoozeMenuItemSelected(preset):
+				return snooze(until: preset.input, &state)
+
 			case let .sortOrderChanged(sortOrder):
 				state.sortOrder = sortOrder
 				sortRows(&state)
@@ -913,6 +951,15 @@ struct ReplicaFeature {
 					return finish
 				}
 				return .merge(.run { _ in NSSound.beep() }, finish)
+
+			case .unsnoozeMenuItemSelected:
+				guard state.canUnsnooze else {
+					return .none
+				}
+				let waiting = state.selectedIDs.filter {
+					state.rows[id: $0]?.views.contains(.waiting) == true
+				}
+				return write(.edit(waiting, .setInput("wait", text: "")), &state)
 
 			case .useTaskwarriorDefaultsButtonTapped:
 				state.isTaskrcHintPresented = false
@@ -1413,6 +1460,10 @@ struct ReplicaFeature {
 		case .markPending:
 			return write(.markPending(ids), &state)
 
+		case .snooze:
+			// Its menu's items say when until, each through `snooze(until:)`.
+			return .none
+
 		case .startStop:
 			guard state.isStopping else {
 				return write(.start(ids), &state)
@@ -1430,6 +1481,16 @@ struct ReplicaFeature {
 	) -> [WritePlan.RepairedChain] {
 		let planner = WritePlanner(taskrc: state.runningTaskrc, timeZone: timeZone)
 		return (try? planner.plan(action, tasks: tasks, at: now).repairedChains) ?? []
+	}
+
+	/// Has every selected task wait until `text`, in Taskwarrior's syntax, as an inspector Wait edit
+	/// does, asking the same Series question. Unlike one, it doesn't keep them in the table, so they
+	/// leave Pending for Waiting once it commits.
+	private func snooze(until text: String, _ state: inout State) -> Effect<Action> {
+		guard state.enabledCommands.contains(.snooze) else {
+			return .none
+		}
+		return write(.edit(state.selectedIDs, .setInput("wait", text: text)), &state)
 	}
 
 	/// Selects the task `offset` rows from the inspected one, as ⌘⌥↑ and ⌘⌥↓ do.

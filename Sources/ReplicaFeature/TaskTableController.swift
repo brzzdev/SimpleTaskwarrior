@@ -376,9 +376,10 @@ final class TaskTableController: NSViewController, NSMenuDelegate, NSMenuItemVal
 			table.selectRowIndexes(IndexSet(integer: clicked), byExtendingSelection: false)
 		}
 		for item in rowMenu.items {
-			let command = ReplicaFeature.TaskCommand(action: item.action)
+			let command = ReplicaFeature.TaskCommand(menuItem: item)
 			item.isHidden = command.map { !store.state.isOffered($0) } ?? false
 		}
+		ReplicaWindowController.validateSnoozeItem(in: rowMenu, store: store)
 	}
 
 	/// Shows the store's rows and selection, reloading only when the rows changed. Scrolls to a task

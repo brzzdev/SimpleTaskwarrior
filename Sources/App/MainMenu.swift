@@ -139,6 +139,7 @@ func mainMenu(
 	]
 
 	let task = NSMenu(title: "Task")
+	task.delegate = ReplicaWindowController.taskMenuDelegate
 	task.items = ReplicaWindowController.taskCommandMenuItems()
 		+ [
 			.separator(),

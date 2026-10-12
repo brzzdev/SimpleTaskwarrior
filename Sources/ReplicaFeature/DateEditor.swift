@@ -227,10 +227,7 @@ final class DateEditor: NSStackView, NSPopoverDelegate, NSTextFieldDelegate {
 		messageLabel.isHidden = false
 		do {
 			let stored = try resolve(text)
-			messageLabel.stringValue = self.text(stored) {
-				// With seconds where there are any, so the preview is what's stored.
-				$0.formatted(date: .complete, time: $0.hasSeconds ? .standard : .shortened)
-			}
+			messageLabel.stringValue = self.text(stored) { $0.previewText }
 			messageLabel.textColor = .secondaryLabelColor
 		} catch {
 			messageLabel.stringValue = message(for: error)
@@ -267,13 +264,19 @@ extension DateEditor {
 }
 
 extension Date {
-	fileprivate var hasSeconds: Bool {
-		Calendar.current.component(.second, from: self) != 0
+	/// In full as a date field previews what its text resolves to, with seconds where there are any,
+	/// so the preview is what's stored.
+	var previewText: String {
+		formatted(date: .complete, time: hasSeconds ? .standard : .shortened)
 	}
 
 	/// Whether the date is the start of its day, as a date without a time resolves.
 	fileprivate var isMidnight: Bool {
 		Calendar.current.startOfDay(for: self) == self
+	}
+
+	private var hasSeconds: Bool {
+		Calendar.current.component(.second, from: self) != 0
 	}
 }
 

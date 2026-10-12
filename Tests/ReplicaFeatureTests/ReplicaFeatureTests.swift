@@ -284,7 +284,7 @@ struct ReplicaFeatureTests {
 		#expect(state.enabledCommands.isEmpty)
 
 		state.selection = [UUID(0), UUID(1)]
-		#expect(state.enabledCommands == [.delete, .done, .startStop])
+		#expect(state.enabledCommands == [.delete, .done, .snooze, .startStop])
 		#expect(!state.isStopping)
 
 		state.selection = [UUID(1)]
@@ -302,6 +302,173 @@ struct ReplicaFeatureTests {
 		state.isNewTaskRowPresented = false
 		state.writeProgress = .running
 		#expect(state.enabledCommands.isEmpty)
+	}
+
+	@Test
+	func unsnoozeIsEnabledOnlyWhereASelectedTaskIsWaiting() throws {
+		let pending = storedTask(0, "Buy milk", workingSetID: 1)
+		let waiting = storedTask(1, "Walk the dog", workingSetID: 2, ["wait": "1790600000"])
+		let completed = storedTask(2, "File taxes", status: "completed", workingSetID: nil)
+		var state = try loadedState([pending, waiting, completed])
+
+		state.selection = [UUID(0)]
+		#expect(state.enabledCommands.contains(.snooze))
+		#expect(!state.canUnsnooze)
+
+		state.selection = [UUID(0), UUID(1)]
+		#expect(state.enabledCommands.contains(.snooze))
+		#expect(state.canUnsnooze)
+
+		state.selection = [UUID(1), UUID(2)]
+		#expect(!state.enabledCommands.contains(.snooze))
+		#expect(!state.canUnsnooze)
+
+		state.selection = [UUID(1)]
+		state.writeProgress = .running
+		#expect(!state.canUnsnooze)
+	}
+
+	@Test
+	func snoozingTasksUntilTomorrowMovesThemToWaitingInOneUndoPoint() async throws {
+		let milk = storedTask(0, "Buy milk", workingSetID: 1)
+		let dog = storedTask(1, "Walk the dog", workingSetID: 2)
+		let plans = LockIsolated<[WritePlan]>([])
+		let undoNames = LockIsolated<[String]>([])
+		var initialState = try loadedState([milk, dog], selection: [UUID(0), UUID(1)])
+		initialState.sidebarSelection = [.view(.pending)]
+		let store = TestStore(initialState: initialState) {
+			ReplicaFeature()
+		} withDependencies: {
+			$0.continuousClock = TestClock()
+			$0.date.now = now
+			$0.replicaClient.apply = applying([milk, dog], plans: plans, undoNames: undoNames)
+			$0.timeZone = .gmt
+		}
+		// The table's reads are other tests' business: this one is about where the tasks land.
+		store.exhaustivity = .off(showSkippedAssertions: false)
+
+		await store.send(.snoozeMenuItemSelected(.tomorrow))
+		await store.receive(\.writeCommitted)
+
+		#expect(plans.value.count == 1)
+		#expect(undoNames.value == ["Change Wait Date of 2 Tasks"])
+		// The start of 22 September 2026, the day after `now`, in GMT.
+		#expect(store.state.storedTasks.map { $0.properties["wait"] } == ["1790035200", "1790035200"])
+		#expect(store.state.rows.isEmpty)
+		#expect(store.state.selection.isEmpty)
+		#expect(store.state.sidebar.views.map(\.count) == [0, 0, 2, 0, 0])
+		await store.finish()
+	}
+
+	@Test
+	func snoozingUntilACustomDateWritesItAsTheInspectorsWaitWould() async throws {
+		let milk = storedTask(0, "Buy milk", workingSetID: 1)
+		let plans = LockIsolated<[WritePlan]>([])
+		let initialState = try loadedState([milk], selection: [UUID(0)])
+		let store = TestStore(initialState: initialState) {
+			ReplicaFeature()
+		} withDependencies: {
+			$0.continuousClock = TestClock()
+			$0.date.now = now
+			$0.replicaClient.apply = applying([milk], plans: plans)
+			$0.timeZone = .gmt
+		}
+		store.exhaustivity = .off(showSkippedAssertions: false)
+
+		await store.send(.customSnoozeDateSubmitted("3d"))
+		await store.receive(\.writeCommitted)
+
+		#expect(
+			try plans.value == [
+				planner.plan(
+					.edit([UUID(0)], .setInput("wait", text: "3d")),
+					tasks: properties(of: [milk]),
+					at: now,
+				),
+			],
+		)
+		#expect(store.state.storedTasks.first?.properties["wait"] == "1790259200")
+		await store.finish()
+	}
+
+	@Test
+	func snoozingAnInstanceChangesOnlyItLikeAnyDateButUntil() async throws {
+		let plants = series(0, "Water plants", instances: [1, 2])
+		let plans = LockIsolated<[WritePlan]>([])
+		var initialState = try loadedState(plants.instances, selection: [UUID(1)])
+		initialState.storedTasks.append(plants.template)
+		let stored = initialState.storedTasks
+		let store = TestStore(initialState: initialState) {
+			ReplicaFeature()
+		} withDependencies: {
+			$0.continuousClock = TestClock()
+			$0.date.now = now
+			$0.replicaClient.apply = applying(stored, plans: plans)
+			$0.timeZone = .gmt
+		}
+		store.exhaustivity = .off(showSkippedAssertions: false)
+
+		await store.send(.snoozeMenuItemSelected(.nextWeek))
+		await store.receive(\.writeCommitted)
+
+		#expect(
+			try plans.value == [
+				planner.plan(
+					.edit([UUID(1)], .setInput("wait", text: "monday")),
+					tasks: properties(of: stored),
+					at: now,
+				),
+			],
+		)
+		await store.finish()
+	}
+
+	@Test
+	func snoozeAndUnsnoozeDoNothingWhereTheSelectionIsClosed() async throws {
+		let completed = storedTask(0, "File taxes", status: "completed", workingSetID: nil)
+		let initialState = try loadedState([completed], selection: [UUID(0)])
+		let store = TestStore(initialState: initialState) {
+			ReplicaFeature()
+		}
+
+		await store.send(.snoozeMenuItemSelected(.tomorrow))
+		await store.send(.customSnoozeDateSubmitted("3d"))
+		await store.send(.unsnoozeMenuItemSelected)
+	}
+
+	@Test
+	func unsnoozingClearsTheWaitOfTheSelectedWaitingTasksAndReturnsThemToPending() async throws {
+		let milk = storedTask(0, "Buy milk", workingSetID: 1)
+		let dog = storedTask(1, "Walk the dog", workingSetID: 2, ["wait": "1790600000"])
+		let plans = LockIsolated<[WritePlan]>([])
+		var initialState = try loadedState([milk, dog], selection: [UUID(0), UUID(1)])
+		initialState.sidebarSelection = [.view(.pending), .view(.waiting)]
+		let store = TestStore(initialState: initialState) {
+			ReplicaFeature()
+		} withDependencies: {
+			$0.continuousClock = TestClock()
+			$0.date.now = now
+			$0.replicaClient.apply = applying([milk, dog], plans: plans)
+			$0.timeZone = .gmt
+		}
+		store.exhaustivity = .off(showSkippedAssertions: false)
+
+		await store.send(.unsnoozeMenuItemSelected)
+		await store.receive(\.writeCommitted)
+
+		// Only Walk the dog was waiting.
+		#expect(
+			try plans.value == [
+				planner.plan(
+					.edit([UUID(1)], .setInput("wait", text: "")),
+					tasks: properties(of: [milk, dog]),
+					at: now,
+				),
+			],
+		)
+		#expect(store.state.storedTasks.allSatisfy { $0.properties["wait"] == nil })
+		#expect(store.state.sidebar.views.map(\.count) == [0, 2, 0, 0, 0])
+		await store.finish()
 	}
 
 	@Test
@@ -2968,6 +3135,29 @@ extension AsyncStream where Element: Sendable {
 			continuation.yield(element)
 			continuation.finish()
 		}
+	}
+}
+
+/// A Replica holding `tasks` that commits each plan to them, recording it and its Undo point's
+/// name.
+private func applying(
+	_ tasks: [StoredTask],
+	plans: LockIsolated<[WritePlan]>,
+	undoNames: LockIsolated<[String]> = LockIsolated([]),
+) -> @Sendable (WritePlan, String, URL) async throws -> ApplyOutcome {
+	let replica = LockIsolated(tasks)
+	return { plan, name, _ in
+		plans.withValue { $0.append(plan) }
+		undoNames.withValue { $0.append(name) }
+		let tasks = replica.withValue { tasks in
+			let applied = plan.applied(to: properties(of: tasks))
+			for index in tasks.indices {
+				tasks[index].properties = UUID(uuidString: tasks[index].uuid)
+					.flatMap { applied[$0] } ?? tasks[index].properties
+			}
+			return tasks
+		}
+		return ApplyOutcome(isCommitted: true, snapshot: snapshot(tasks))
 	}
 }
 
