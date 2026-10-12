@@ -24,6 +24,10 @@ struct ReplicaFeature {
 		var chainRepairPrompt: ChainRepairPrompt?
 		/// The task a New Task is creating, which is selected once it commits.
 		var creatingTask: Models.Task.ID?
+		/// The `data.location` banners closed, in any window. Each holds for its Replica and folder
+		/// alone, so naming another folder shows the banner again.
+		@Shared(.appStorage("dataLocationDismissals"))
+		var dataLocationDismissals: Set<DataLocationDismissal> = []
 		/// The Replica's folder, or where it last was while the window can't open it.
 		var directory: URL?
 		/// Set as New Task selects the task it created, for the inspector to put the cursor in its
@@ -149,6 +153,19 @@ struct ReplicaFeature {
 			unavailable == .openElsewhere ? nil : directory
 		}
 
+		/// What closing the `data.location` banner dismisses: the window's Replica and the other
+		/// folder its Taskrc names. Nil where the Taskrc names the Replica, or names nothing.
+		var dataLocationDismissal: DataLocationDismissal? {
+			guard hasTaskrc, let directory, let location = taskrc?.taskrc["data.location"] else {
+				return nil
+			}
+			let dismissal = DataLocationDismissal(
+				dataLocation: standardizedFolder(URL(filePath: location)),
+				replica: standardizedFolder(directory),
+			)
+			return dismissal.dataLocation == dismissal.replica ? nil : dismissal
+		}
+
 		/// The commands that apply to every selected task. None applies while a write would queue, or
 		/// while the new-task row is open, whose Return would find the write in the way. Read once for
 		/// all of them, since the selection is looked up for each read.
@@ -204,14 +221,16 @@ struct ReplicaFeature {
 			taskrc?.isPaired ?? false
 		}
 
-		/// The Taskrc's `data.location`, where it names a folder other than the window's Replica.
+		/// The Taskrc's `data.location`, where it names a folder other than the window's Replica and
+		/// the user hasn't closed its banner.
 		var otherDataLocation: String? {
-			guard hasTaskrc, let directory, let location = taskrc?.taskrc["data.location"] else {
+			guard
+				let dismissal = dataLocationDismissal,
+				!dataLocationDismissals.contains(dismissal)
+			else {
 				return nil
 			}
-			return standardizedFolder(URL(filePath: location)) == standardizedFolder(directory)
-				? nil
-				: location
+			return taskrc?.taskrc["data.location"]
 		}
 
 		/// The Taskrc the window runs on: the last one that loaded, or TW's defaults.
@@ -366,6 +385,13 @@ struct ReplicaFeature {
 		}
 	}
 
+	/// A Replica's folder and the other folder its Taskrc's `data.location` names, each standardized,
+	/// whose banner the user closed.
+	struct DataLocationDismissal: Codable, Hashable {
+		var dataLocation: URL
+		var replica: URL
+	}
+
 	/// A Delete or edit of Recurrence instances, asking for each Series whether to take it whole, as
 	/// `recurrence.confirmation=prompt` asks. A Delete asks about the chains the answer breaks too,
 	/// so the whole Delete is one Undo point.
@@ -455,6 +481,7 @@ struct ReplicaFeature {
 		/// Cancel in the sheet asking whether to repair dependency chains.
 		case chainRepairDismissed
 		case chooseTaskrcButtonTapped
+		case dataLocationBannerCloseButtonTapped
 		case deleteButtonTapped
 		case dependencyChosen(Models.Task.ID, dependency: Models.Task.ID)
 		case dependencyRemoveButtonTapped(Models.Task.ID, dependency: Models.Task.ID)
@@ -590,6 +617,13 @@ struct ReplicaFeature {
 
 			case .chooseTaskrcButtonTapped:
 				state.isTaskrcPanelPresented = true
+				return .none
+
+			case .dataLocationBannerCloseButtonTapped:
+				guard let dismissal = state.dataLocationDismissal else {
+					return .none
+				}
+				state.$dataLocationDismissals.withLock { _ = $0.insert(dismissal) }
 				return .none
 
 			case .deleteButtonTapped:
