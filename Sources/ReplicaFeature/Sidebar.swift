@@ -2,20 +2,17 @@
 import Foundation
 import Models
 
-/// One of the fixed views at the top of the sidebar. Pending, Waiting, Completed and Deleted
-/// split tasks by status; Active overlaps Pending.
+/// One of the fixed views at the top of the sidebar, which split tasks by status.
 enum TaskView: Hashable {
-	case active
 	case completed
 	case deleted
 	case pending
 	case waiting
 
 	/// In sidebar order.
-	static let all: [Self] = [.active, .pending, .waiting, .completed, .deleted]
+	static let all: [Self] = [.pending, .waiting, .completed, .deleted]
 
-	/// The views `task` shows in at `now`, or none for a Recurrence template. A started pending task
-	/// is in Active as well as Pending, as `task active` and the `+ACTIVE` virtual tag count it.
+	/// The views `task` shows in at `now`, or none for a Recurrence template.
 	static func views(of task: Models.Task, at now: Date) -> Set<Self> {
 		guard !task.isTemplate else {
 			return []
@@ -24,7 +21,7 @@ enum TaskView: Hashable {
 		case .completed: return [.completed]
 		case .deleted: return [.deleted]
 		case .pending where task.isWaiting(at: now): return [.waiting]
-		case .pending: return task.start == nil ? [.pending] : [.active, .pending]
+		case .pending: return [.pending]
 		case .recurring: return []
 		}
 	}
@@ -107,7 +104,7 @@ struct SidebarFilter {
 	var hiddenTags: Set<String>
 	var projects: [String] = []
 	var tags: [String] = []
-	/// The selected fixed views, or Pending when none is selected.
+	/// The selected fixed views. The window's selection always has one.
 	var views: Set<TaskView> = []
 
 	init(_ selection: Set<SidebarItem>, hiddenTags: Set<String> = []) {
@@ -118,9 +115,6 @@ struct SidebarFilter {
 			case let .tag(tag): tags.append(tag)
 			case let .view(view): views.insert(view)
 			}
-		}
-		if views.isEmpty {
-			views = [.pending]
 		}
 	}
 
@@ -138,7 +132,7 @@ struct SidebarFilter {
 			&& (tags.isEmpty || tags.contains(where: row.task.tags.contains))
 	}
 
-	/// Whether `row` is in any selected view, which a task in more than one view can be.
+	/// Whether `row` is in any selected view.
 	func isInSelectedViews(_ row: TaskRow) -> Bool {
 		!views.isDisjoint(with: row.views)
 	}

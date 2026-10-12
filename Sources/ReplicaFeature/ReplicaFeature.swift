@@ -76,7 +76,8 @@ struct ReplicaFeature {
 		var selection: Set<Models.Task.ID> = []
 		/// The Delete or edit asking whether to take the Series of each Recurrence instance it writes.
 		var seriesPrompt: SeriesPrompt?
-		var sidebarSelection: Set<SidebarItem> = []
+		/// Always holds a fixed view, which `SidebarFilter` relies on.
+		var sidebarSelection: Set<SidebarItem> = [.view(.pending)]
 		/// The table's sort, which the table autosaves per Replica and reports once it restores.
 		var sortOrder = [TaskSort(.urgency, order: .reverse)]
 		/// Every task in the Replica as last read, which the blocked rule and Urgency read.
@@ -633,6 +634,9 @@ struct ReplicaFeature {
 			case .binding(\.sidebarSelection):
 				// The sidebar doesn't offer a hidden tag to select.
 				state.sidebarSelection.subtract(state.hiddenTags.map(SidebarItem.tag))
+				if SidebarFilter(state.sidebarSelection).views.isEmpty {
+					state.sidebarSelection.insert(.view(.pending))
+				}
 				state.keptTasks = []
 				filterRows(&state)
 				return .none
@@ -1131,10 +1135,10 @@ struct ReplicaFeature {
 		}
 		state.writeProgress = .running
 		switch action {
-		case let .markPending(ids), let .stop(ids):
+		case let .markPending(ids):
 			state.releasingTasks = Set(ids)
 
-		case .complete, .create, .delete, .edit, .start:
+		case .complete, .create, .delete, .edit, .start, .stop:
 			break
 		}
 		// A Remove Tag is named for the tasks that have the tag as it starts, after any write queued
