@@ -202,7 +202,7 @@ struct ReplicaFeatureTests {
 		let dogUntagged = storedTask(1, "Walk the dog", workingSetID: 2)
 		let plans = LockIsolated<[WritePlan]>([])
 		var initialState = try loadedState([milk, dog, cat], selection: [UUID(0), UUID(1)])
-		initialState.sidebarSelection = [.tag("home")]
+		initialState.sidebarSelection = [.tag("home"), .view(.pending)]
 		let store = TestStore(initialState: initialState) {
 			ReplicaFeature()
 		} withDependencies: {
@@ -359,7 +359,7 @@ struct ReplicaFeatureTests {
 		#expect(store.state.storedTasks.map { $0.properties["wait"] } == ["1790035200", "1790035200"])
 		#expect(store.state.rows.isEmpty)
 		#expect(store.state.selection.isEmpty)
-		#expect(store.state.sidebar.views.map(\.count) == [0, 0, 2, 0, 0])
+		#expect(store.state.sidebar.views.map(\.count) == [0, 2, 0, 0])
 		await store.finish()
 	}
 
@@ -388,7 +388,7 @@ struct ReplicaFeatureTests {
 
 		#expect(store.state.keptTasks.isEmpty)
 		#expect(store.state.rows.isEmpty)
-		#expect(store.state.sidebar.views.map(\.count) == [0, 0, 1, 0, 0])
+		#expect(store.state.sidebar.views.map(\.count) == [0, 1, 0, 0])
 		await store.finish()
 	}
 
@@ -536,7 +536,7 @@ struct ReplicaFeatureTests {
 			],
 		)
 		#expect(store.state.storedTasks.allSatisfy { $0.properties["wait"] == nil })
-		#expect(store.state.sidebar.views.map(\.count) == [0, 2, 0, 0, 0])
+		#expect(store.state.sidebar.views.map(\.count) == [2, 0, 0, 0])
 		await store.finish()
 	}
 
@@ -1178,7 +1178,7 @@ struct ReplicaFeatureTests {
 		let milkUntagged = storedTask(0, "Buy milk", workingSetID: 1)
 		let plans = LockIsolated<[WritePlan]>([])
 		var initialState = try loadedState([milk, dog])
-		initialState.sidebarSelection = [.tag("home")]
+		initialState.sidebarSelection = [.tag("home"), .view(.pending)]
 		let store = TestStore(initialState: initialState) {
 			ReplicaFeature()
 		} withDependencies: {
@@ -1378,7 +1378,7 @@ struct ReplicaFeatureTests {
 			message: "",
 			title: "",
 		)
-		initialState.sidebarSelection = [.project("Home")]
+		initialState.sidebarSelection = [.project("Home"), .view(.pending)]
 		let store = TestStore(initialState: initialState) {
 			ReplicaFeature()
 		} withDependencies: {
@@ -1635,7 +1635,7 @@ struct ReplicaFeatureTests {
 			return TaskrcClient.Loaded(taskrc: taskrc, url: taskrcFile)
 		}
 		var initialState = try loadedState([])
-		initialState.sidebarSelection = [.project("Home")]
+		initialState.sidebarSelection = [.project("Home"), .view(.pending)]
 		initialState.taskrc = taskrc(defaultProject: "Home")
 		let store = TestStore(initialState: initialState) {
 			ReplicaFeature()
@@ -1804,7 +1804,7 @@ struct ReplicaFeatureTests {
 			$0.selection = []
 			$0.writeProgress = .running
 		}
-		// Active, so the CLI's start raised its Urgency.
+		// Started, so the CLI's start raised its Urgency.
 		await store.receive(\.tasksLoaded) {
 			$0.allRows = try [row(milkStarted, urgency: 4)]
 			$0.storedTasks = [milkStarted]
@@ -2649,66 +2649,27 @@ struct ReplicaFeatureTests {
 	}
 
 	@Test
-	func sidebarCountsAStartedTaskUnderBothActiveAndPending() throws {
-		let started = ["start": String(Int(now.timeIntervalSince1970))]
+	func sidebarCountsAStartedTaskUnderPendingOrWaiting() throws {
+		let start = String(Int(now.timeIntervalSince1970))
+		let later = String(Int(now.timeIntervalSince1970) + 3_600)
 		let rows = try (0 ..< 5).map { seed in
-			try row(storedTask(seed, "Task \(seed)", workingSetID: seed + 1, seed < 2 ? started : [:]))
-		}
+			let properties = seed < 2 ? ["start": start] : [:]
+			return try row(storedTask(seed, "Task \(seed)", workingSetID: seed + 1, properties))
+		} + [row(storedTask(5, "Ring the client", workingSetID: 6, ["start": start, "wait": later]))]
 
-		let sidebar = Sidebar(hiddenTags: [], rows: rows, selection: [])
+		let sidebar = Sidebar(hiddenTags: [], rows: rows, selection: [.view(.pending)])
 
 		#expect(
 			sidebar.views.map(\.item)
-				== [.view(.active), .view(.pending), .view(.waiting), .view(.completed), .view(.deleted)],
+				== [.view(.pending), .view(.waiting), .view(.completed), .view(.deleted)],
 		)
-		#expect(sidebar.views.map(\.count) == [2, 5, 0, 0, 0])
-	}
-
-	@Test
-	func activeListsTheStartedTasksThatArentWaiting() async {
-		let store = TestStore(initialState: ReplicaFeature.State(bookmark: Data())) {
-			ReplicaFeature()
-		} withDependencies: {
-			$0.date.now = now
-			$0.timeZone = .gmt
-		}
-		store.exhaustivity = .off
-		let started = String(Int(now.timeIntervalSince1970))
-		let later = String(Int(now.timeIntervalSince1970) + 3_600)
-		let plumber = storedTask(0, "Call the plumber", workingSetID: 1, ["project": "Home"])
-		let tasks = [
-			storedTask(1, "Fix the build", workingSetID: 2, ["project": "Work", "start": started]),
-			storedTask(2, "Sweep", workingSetID: 3, ["project": "Home"]),
-			storedTask(3, "Ring the client", workingSetID: 4, ["start": started, "wait": later]),
-		]
-		var startedPlumber = plumber
-		startedPlumber.properties["start"] = started
-		await store.send(.tasksLoaded(snapshot([startedPlumber] + tasks)))
-		let descriptions = { store.state.rows.map(\.task.description).sorted() }
-
-		await store.send(\.binding.sidebarSelection, [.view(.active)])
-		#expect(descriptions() == ["Call the plumber", "Fix the build"])
-
-		await store.send(\.binding.sidebarSelection, [.view(.active), .view(.pending)])
-		#expect(descriptions() == ["Call the plumber", "Fix the build", "Sweep"])
-
-		await store.send(\.binding.sidebarSelection, [.project("Home"), .view(.active)])
-		#expect(descriptions() == ["Call the plumber"])
-		#expect(store.state.sidebar.projects.map(\.count) == [1, 1])
-
-		await store.send(\.binding.sidebarSelection, [.view(.waiting)])
-		#expect(descriptions() == ["Ring the client"])
-
-		// Stopped, it leaves Active and stays in Pending.
-		await store.send(.tasksLoaded(snapshot([plumber] + tasks, readIndex: 1)))
-		#expect(store.state.sidebar.views.map(\.count) == [1, 3, 1, 0, 0])
+		#expect(sidebar.views.map(\.count) == [5, 1, 0, 0])
 	}
 
 	@Test(arguments: releasingWrites)
 	func releasingAnEditKeptTaskDropsItFromItsView(
 		bike: StoredTask,
 		view: TaskView,
-		button: ReplicaFeature.Action,
 	) async throws {
 		let tagged = StoredTask(
 			properties: bike.properties.merging(["tag_outdoor": "x"]) { $1 },
@@ -2734,18 +2695,17 @@ struct ReplicaFeatureTests {
 
 		await store.send(.inspectorFieldSubmitted([UUID(0)], .addTags(["outdoor"])))
 		await store.receive(\.writeCommitted)
-		await store.send(button)
+		await store.send(.markPendingButtonTapped)
 		await store.receive(\.writeCommitted)
 
 		#expect(store.state.rows.isEmpty)
-		#expect(store.state.sidebar.views.map(\.count) == [0, 1, 0, 0, 0])
+		#expect(store.state.sidebar.views.map(\.count) == [1, 0, 0, 0])
 	}
 
 	@Test(arguments: releasingWrites)
 	func aReleasingWriteThatFailsKeepsWhatAnEditKept(
 		bike: StoredTask,
 		view: TaskView,
-		button: ReplicaFeature.Action,
 	) async throws {
 		var bike = bike
 		bike.properties["project"] = "Home"
@@ -2776,7 +2736,7 @@ struct ReplicaFeatureTests {
 		// Moves the task out of Home, which only the keep holds it in.
 		await store.send(.inspectorFieldSubmitted([UUID(0)], .set("project", .string("Work"))))
 		await store.receive(\.writeCommitted)
-		await store.send(button)
+		await store.send(.markPendingButtonTapped)
 		await store.receive(\.writeFailed)
 		await store.send(.writeFailureDismissed)
 
@@ -2802,10 +2762,10 @@ struct ReplicaFeatureTests {
 		let sidebar = Sidebar(
 			hiddenTags: [],
 			rows: rows,
-			selection: [.project("Errands"), .tag("bug")],
+			selection: [.project("Errands"), .tag("bug"), .view(.pending)],
 		)
 
-		#expect(sidebar.views.map(\.count) == [0, 2, 0, 1, 0])
+		#expect(sidebar.views.map(\.count) == [2, 0, 1, 0])
 		#expect(
 			sidebar.projects == [
 				Sidebar.Project(children: [], count: 0, name: "Errands"),
@@ -2837,9 +2797,9 @@ struct ReplicaFeatureTests {
 			),
 		]
 
-		let sidebar = Sidebar(hiddenTags: ["review"], rows: rows, selection: [])
+		let sidebar = Sidebar(hiddenTags: ["review"], rows: rows, selection: [.view(.pending)])
 
-		#expect(sidebar.views.map(\.count) == [0, 2, 0, 0, 0])
+		#expect(sidebar.views.map(\.count) == [2, 0, 0, 0])
 		#expect(sidebar.projects == [Sidebar.Project(children: [], count: 1, name: "Home")])
 		#expect(
 			sidebar.tags == [
@@ -2849,9 +2809,13 @@ struct ReplicaFeatureTests {
 		)
 
 		// Both hidden, the task with both counts against each.
-		let both = Sidebar(hiddenTags: ["office", "review"], rows: rows, selection: [])
+		let both = Sidebar(
+			hiddenTags: ["office", "review"],
+			rows: rows,
+			selection: [.view(.pending)],
+		)
 
-		#expect(both.views.map(\.count) == [0, 1, 0, 0, 0])
+		#expect(both.views.map(\.count) == [1, 0, 0, 0])
 		#expect(both.projects.isEmpty)
 		#expect(
 			both.tags == [
@@ -2898,7 +2862,7 @@ struct ReplicaFeatureTests {
 		)
 		let descriptions = { store.state.rows.map(\.task.description).sorted() }
 
-		// No fixed view selected means Pending, and a project takes in its subprojects, by segment.
+		// A project takes in its subprojects, by segment.
 		await store.send(\.binding.sidebarSelection, [.project("Home")])
 		#expect(descriptions() == ["Call the plumber", "Dig the beds"])
 
@@ -2941,12 +2905,12 @@ struct ReplicaFeatureTests {
 
 		// A hidden tag can't be selected.
 		await store.send(\.binding.sidebarSelection, [.tag("home"), .tag("office"), .tag("review")]) {
-			$0.sidebarSelection = [.tag("home"), .tag("office")]
+			$0.sidebarSelection = [.tag("home"), .tag("office"), .view(.pending)]
 		}
 
 		await store.send(.hiddenTagToggled("office")) {
 			$0.hiddenTags = ["office", "review"]
-			$0.sidebarSelection = [.tag("home")]
+			$0.sidebarSelection = [.tag("home"), .view(.pending)]
 		}
 		#expect(descriptions() == ["Dig the beds"])
 
@@ -2960,6 +2924,48 @@ struct ReplicaFeatureTests {
 		await store.send(.hiddenTagToggled("home"))
 		await store.send(.hiddenTagToggled("office"))
 		#expect(descriptions() == ["Sweep"])
+	}
+
+	@Test
+	func aSelectionLeftWithNoViewGainsPending() async {
+		let store = TestStore(initialState: ReplicaFeature.State(bookmark: Data())) {
+			ReplicaFeature()
+		} withDependencies: {
+			$0.date.now = now
+			$0.timeZone = .gmt
+		}
+		store.exhaustivity = .off
+		#expect(store.state.sidebarSelection == [.view(.pending)])
+
+		await store.send(\.binding.sidebarSelection, []) {
+			$0.sidebarSelection = [.view(.pending)]
+		}
+		await store.send(\.binding.sidebarSelection, [.tag("home")]) {
+			$0.sidebarSelection = [.tag("home"), .view(.pending)]
+		}
+		await store.send(\.binding.sidebarSelection, [.view(.completed), .view(.waiting)])
+		await store.send(\.binding.sidebarSelection, [.view(.completed)]) {
+			$0.sidebarSelection = [.view(.completed)]
+		}
+
+		// Hiding a tag selected alongside a view keeps only the view.
+		await store.send(\.binding.sidebarSelection, [.tag("home"), .view(.completed)])
+		await store.send(.hiddenTagToggled("home")) {
+			$0.hiddenTags = ["home"]
+			$0.sidebarSelection = [.view(.completed)]
+		}
+	}
+
+	@Test
+	func markPendingTakesTheOtherCommandsPlaceOnlyWhereEveryViewIsClosed() {
+		var state = ReplicaFeature.State(bookmark: Data())
+		state.sidebarSelection = [.view(.completed)]
+		#expect(state.isOffered(.markPending))
+		#expect(!state.isOffered(.done))
+
+		state.sidebarSelection = [.view(.completed), .view(.pending)]
+		#expect(!state.isOffered(.markPending))
+		#expect(state.isOffered(.done))
 	}
 
 	@Test
@@ -2982,7 +2988,7 @@ struct ReplicaFeatureTests {
 		await store.send(.inspectorFieldSubmitted([UUID(0)], .addTags(["review"])))
 		await store.receive(\.writeCommitted)
 		#expect(store.state.rows.map(\.id) == [UUID(0)])
-		#expect(store.state.sidebar.views.map(\.count) == [0, 0, 0, 0, 0])
+		#expect(store.state.sidebar.views.map(\.count) == [0, 0, 0, 0])
 
 		await store.send(.hiddenTagToggled("office")) {
 			$0.keptTasks = []
@@ -3073,7 +3079,7 @@ struct ReplicaFeatureTests {
 		continuation.yield(.success(snapshot([call])))
 		await store.receive(\.readSucceeded)
 		#expect(store.state.rows.isEmpty)
-		#expect(store.state.sidebar.views.map(\.count) == [0, 0, 1, 0, 0])
+		#expect(store.state.sidebar.views.map(\.count) == [0, 1, 0, 0])
 
 		// Past `wait`, with nothing committed to the Replica.
 		time.setValue(now.addingTimeInterval(60))
@@ -3168,29 +3174,10 @@ private struct TaskStreams {
 /// When every test task was entered, so none has aged.
 private let now = Date(timeIntervalSince1970: 1_790_000_000)
 
-/// Each write that releases a task an edit kept: the task, the view it leaves, and the button
-/// that writes it.
-private let releasingWrites: [(StoredTask, TaskView, ReplicaFeature.Action)] = [
-	(
-		storedTask(
-			0,
-			"Fix the bike",
-			workingSetID: 1,
-			["start": String(Int(now.timeIntervalSince1970))],
-		),
-		.active,
-		.startStopButtonTapped,
-	),
-	(
-		storedTask(0, "Fix the bike", status: "completed", workingSetID: nil),
-		.completed,
-		.markPendingButtonTapped,
-	),
-	(
-		storedTask(0, "Fix the bike", status: "deleted", workingSetID: nil),
-		.deleted,
-		.markPendingButtonTapped,
-	),
+/// Each closed task Mark Pending releases once an edit kept it: the task, and the view it leaves.
+private let releasingWrites: [(StoredTask, TaskView)] = [
+	(storedTask(0, "Fix the bike", status: "completed", workingSetID: nil), .completed),
+	(storedTask(0, "Fix the bike", status: "deleted", workingSetID: nil), .deleted),
 ]
 
 private let replicaDirectory = URL(filePath: "/Users/paul/.task", directoryHint: .isDirectory)
