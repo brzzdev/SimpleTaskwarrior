@@ -25,7 +25,7 @@ final class SnoozeDateAccessory: NSStackView, NSTextFieldDelegate {
 		self.onChange = onChange
 		self.planner = planner
 		self.tasks = tasks
-		super.init(frame: NSRect(origin: .zero, size: NSSize(width: accessoryWidth, height: 0)))
+		super.init(frame: NSRect(origin: .zero, size: NSSize(width: alertAccessoryWidth, height: 0)))
 		alignment = .leading
 		orientation = .vertical
 		spacing = 4
@@ -38,7 +38,7 @@ final class SnoozeDateAccessory: NSStackView, NSTextFieldDelegate {
 			view.widthAnchor.constraint(equalTo: widthAnchor).isActive = true
 		}
 		// The empty label still takes a line, so the sheet needn't grow as a message appears.
-		setFrameSize(NSSize(width: accessoryWidth, height: fittingSize.height))
+		setFrameSize(NSSize(width: alertAccessoryWidth, height: fittingSize.height))
 	}
 
 	@available(*, unavailable)
@@ -74,6 +74,3 @@ final class SnoozeDateAccessory: NSStackView, NSTextFieldDelegate {
 		return date.previewText
 	}
 }
-
-/// As wide as an alert's text.
-private let accessoryWidth: CGFloat = 300

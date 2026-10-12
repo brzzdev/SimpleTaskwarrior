@@ -378,8 +378,11 @@ final class TaskTableController: NSViewController, NSMenuDelegate, NSMenuItemVal
 		for item in rowMenu.items {
 			let command = ReplicaFeature.TaskCommand(menuItem: item)
 			item.isHidden = command.map { !store.state.isOffered($0) } ?? false
+			// AppKit's validation passes over an item with a submenu.
+			if command == .snooze {
+				item.isEnabled = store.state.isMenuEnabled(.snooze)
+			}
 		}
-		ReplicaWindowController.validateSnoozeItem(in: rowMenu, store: store)
 	}
 
 	/// Shows the store's rows and selection, reloading only when the rows changed. Scrolls to a task

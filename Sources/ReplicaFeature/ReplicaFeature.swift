@@ -197,7 +197,7 @@ struct ReplicaFeature {
 
 		/// Whether Unsnooze applies: where Snooze does and a selected task is waiting.
 		var canUnsnooze: Bool {
-			enabledCommands.contains(.snooze) && selectedRows().contains { $0.views.contains(.waiting) }
+			enabledCommands.contains(.snooze) && !selectedWaitingIDs.isEmpty
 		}
 
 		/// Whether the window has a Taskrc, rather than running on TW's defaults.
@@ -266,6 +266,11 @@ struct ReplicaFeature {
 			Set(selectedTasks().flatMap(\.tags)).sorted()
 		}
 
+		/// The selected tasks that are waiting, which Unsnooze writes, in the table's order.
+		var selectedWaitingIDs: [Models.Task.ID] {
+			selectedIDs.filter { rows[id: $0]?.views.contains(.waiting) == true }
+		}
+
 		var sidebar: Sidebar {
 			Sidebar(hiddenTags: hiddenTags, rows: allRows, selection: sidebarSelection)
 		}
@@ -311,18 +316,13 @@ struct ReplicaFeature {
 			return (command == .markPending) == offersMarkPending
 		}
 
+		/// The selected tasks, in no particular order.
+		func selectedTasks() -> [Models.Task] {
+			selection.compactMap { rows[id: $0]?.task }
+		}
+
 		private func isStopping(_ tasks: [Models.Task]) -> Bool {
 			!tasks.isEmpty && tasks.allSatisfy { $0.start != nil }
-		}
-
-		/// The selected rows, in no particular order.
-		private func selectedRows() -> [TaskRow] {
-			selection.compactMap { rows[id: $0] }
-		}
-
-		/// The selected tasks, in no particular order.
-		private func selectedTasks() -> [Models.Task] {
-			selectedRows().map(\.task)
 		}
 	}
 
@@ -956,10 +956,7 @@ struct ReplicaFeature {
 				guard state.canUnsnooze else {
 					return .none
 				}
-				let waiting = state.selectedIDs.filter {
-					state.rows[id: $0]?.views.contains(.waiting) == true
-				}
-				return write(.edit(waiting, .setInput("wait", text: "")), &state)
+				return write(.edit(state.selectedWaitingIDs, .setInput("wait", text: "")), &state)
 
 			case .useTaskwarriorDefaultsButtonTapped:
 				state.isTaskrcHintPresented = false

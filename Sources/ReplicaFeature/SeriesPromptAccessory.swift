@@ -17,7 +17,7 @@ final class SeriesPromptAccessory: NSStackView {
 	init(prompt: ReplicaFeature.SeriesPrompt, send: @escaping (ReplicaFeature.Action) -> Void) {
 		self.send = send
 		templates = prompt.choices.map(\.id)
-		super.init(frame: NSRect(origin: .zero, size: NSSize(width: accessoryWidth, height: 0)))
+		super.init(frame: NSRect(origin: .zero, size: NSSize(width: alertAccessoryWidth, height: 0)))
 		orientation = .vertical
 		alignment = .leading
 
@@ -49,7 +49,7 @@ final class SeriesPromptAccessory: NSStackView {
 		addArrangedSubview(chainsCheckbox)
 		chainsLabel.textColor = .secondaryLabelColor
 		addArrangedSubview(chainsLabel)
-		chainsLabel.widthAnchor.constraint(equalToConstant: accessoryWidth).isActive = true
+		chainsLabel.widthAnchor.constraint(equalToConstant: alertAccessoryWidth).isActive = true
 		update(prompt)
 	}
 
@@ -64,7 +64,7 @@ final class SeriesPromptAccessory: NSStackView {
 		chainsCheckbox.state = prompt.repairsChains ? .on : .off
 		chainsLabel.isHidden = prompt.chainRepairMessage == nil
 		chainsLabel.stringValue = prompt.chainRepairMessage ?? ""
-		setFrameSize(NSSize(width: accessoryWidth, height: fittingSize.height))
+		setFrameSize(NSSize(width: alertAccessoryWidth, height: fittingSize.height))
 	}
 
 	@objc
@@ -79,8 +79,8 @@ final class SeriesPromptAccessory: NSStackView {
 	}
 }
 
-/// As wide as an alert's text.
-private let accessoryWidth: CGFloat = 300
+/// As wide as an alert's text, as every alert's accessory is.
+let alertAccessoryWidth: CGFloat = 300
 
 /// The pop-up items' indices, in the order it lists them.
 private let seriesItem = 1

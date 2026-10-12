@@ -15,10 +15,8 @@ public final class ReplicaWindowController: NSWindowController, NSMenuItemValida
 	NSToolbarDelegate, NSWindowDelegate
 {
 	/// Enables Snooze's item in the menu bar's Task menu as it opens, since AppKit's validation
-	/// passes over an item with a submenu.
-	public static var taskMenuDelegate: any NSMenuDelegate {
-		snoozeItemDelegate
-	}
+	/// passes over an item with a submenu. Kept here, since a menu holds its delegate weakly.
+	public static let taskMenuDelegate: any NSMenuDelegate = SnoozeItemDelegate()
 
 	/// Read by the Remove menus' delegates too.
 	fileprivate let store: StoreOf<ReplicaFeature>
@@ -243,16 +241,6 @@ public final class ReplicaWindowController: NSWindowController, NSMenuItemValida
 			.separator(),
 			submenuItem(String(localized: "Remove Annotation"), delegate: removeAnnotationMenuDelegate),
 		]
-	}
-
-	/// Enables Snooze's item among the task commands in `menu`, as AppKit's validation, which passes
-	/// over an item with a submenu, would. A row's context menu has `store` do it as it opens.
-	static func validateSnoozeItem(in menu: NSMenu, store: StoreOf<ReplicaFeature>?) {
-		for item in menu.items where ReplicaFeature.TaskCommand(menuItem: item) == .snooze {
-			item.isEnabled = store.map {
-				$0.enabledCommands.contains(.snooze) && $0.state.isOffered(.snooze)
-			} ?? false
-		}
 	}
 
 	/// Opens the menu of tasks the inspected task can come to depend on.
@@ -516,7 +504,7 @@ public final class ReplicaWindowController: NSWindowController, NSMenuItemValida
 
 		case #selector(snoozeUntilCustomDate(_:)), #selector(snoozeUntilNextWeek(_:)),
 		     #selector(snoozeUntilTomorrow(_:)):
-			store.enabledCommands.contains(.snooze) && store.state.isOffered(.snooze)
+			validate(menuItem, for: .snooze)
 
 		case #selector(toggleHiddenTag(_:)):
 			validate(
@@ -759,7 +747,7 @@ public final class ReplicaWindowController: NSWindowController, NSMenuItemValida
 		alert.addButton(withTitle: String(localized: "Cancel"))
 		let accessory = SnoozeDateAccessory(
 			planner: WritePlanner(taskrc: store.runningTaskrc, timeZone: timeZone),
-			tasks: store.selectedIDs.compactMap { store.rows[id: $0]?.task.properties },
+			tasks: store.state.selectedTasks().map(\.properties),
 		) { snoozeButton.isEnabled = $0 }
 		snoozeButton.isEnabled = false
 		alert.accessoryView = accessory
@@ -855,8 +843,7 @@ public final class ReplicaWindowController: NSWindowController, NSMenuItemValida
 		if command == .delete, window?.firstResponder is NSText {
 			return false
 		}
-		// The menu keeps the commands Mark Pending replaces, disabled, where the toolbar hides them.
-		return store.enabledCommands.contains(command) && store.state.isOffered(command)
+		return store.state.isMenuEnabled(command)
 	}
 }
 
@@ -966,6 +953,14 @@ private final class ReplicaWindow: NSWindow {
 			}
 			return isUndo ? undoManager.canUndo : undoManager.canRedo
 		}
+	}
+}
+
+extension ReplicaFeature.State {
+	/// Whether `command`'s menu items are enabled. The menu keeps the commands Mark Pending
+	/// replaces, disabled, where the toolbar hides them.
+	func isMenuEnabled(_ command: ReplicaFeature.TaskCommand) -> Bool {
+		enabledCommands.contains(command) && isOffered(command)
 	}
 }
 
@@ -1093,17 +1088,17 @@ let newTaskTitle = String(localized: "New Task")
 
 private let searchIdentifier = NSToolbarItem.Identifier("search")
 
-/// Shared by the Task menu, since a menu holds its delegate weakly.
-@MainActor private let snoozeItemDelegate = SnoozeItemDelegate()
-
-/// Enables Snooze's item in the Task menu as it opens, for the window in front.
+/// Enables Snooze's item in the Task menu as it opens, for the window in front. Only as it opens,
+/// rather than as it updates, which AppKit does on every key equivalent too.
 @MainActor
 private final class SnoozeItemDelegate: NSObject, NSMenuDelegate {
-	func menuNeedsUpdate(_ menu: NSMenu) {
+	func menuWillOpen(_ menu: NSMenu) {
 		let controller = NSApp.target(
 			forAction: #selector(ReplicaWindowController.unsnooze(_:)),
 		) as? ReplicaWindowController
-		ReplicaWindowController.validateSnoozeItem(in: menu, store: controller?.store)
+		for item in menu.items where ReplicaFeature.TaskCommand(menuItem: item) == .snooze {
+			item.isEnabled = controller?.store.state.isMenuEnabled(.snooze) ?? false
+		}
 	}
 }
 
