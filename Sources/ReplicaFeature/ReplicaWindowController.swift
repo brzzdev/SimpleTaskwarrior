@@ -410,6 +410,22 @@ public final class ReplicaWindowController: NSWindowController, NSMenuItemValida
 		show(.waiting)
 	}
 
+	/// Asks for a date in Taskwarrior's syntax, and has every selected task wait until it.
+	@objc
+	public func snoozeUntilCustomDate(_: Any?) {
+		beginSnoozeDateAlert()
+	}
+
+	@objc
+	public func snoozeUntilNextWeek(_: Any?) {
+		store.send(.snoozeMenuItemSelected(.nextWeek))
+	}
+
+	@objc
+	public func snoozeUntilTomorrow(_: Any?) {
+		store.send(.snoozeMenuItemSelected(.tomorrow))
+	}
+
 	@objc
 	public func startOrStop(_: Any?) {
 		store.send(.startStopButtonTapped)
@@ -460,11 +476,22 @@ public final class ReplicaWindowController: NSWindowController, NSMenuItemValida
 	}
 
 	@objc
+	public func unsnooze(_: Any?) {
+		store.send(.unsnoozeMenuItemSelected)
+	}
+
+	@objc
 	public func useTaskwarriorDefaults(_: Any?) {
 		store.send(.useTaskwarriorDefaultsButtonTapped)
 	}
 
 	public func validateMenuItem(_ menuItem: NSMenuItem) -> Bool {
+		// While a sheet is up, AppKit still finds the window's commands through it as the main
+		// window: ⌘⌫ in the sheet's field would delete tasks, and a write's question, with the sheet
+		// holding `alert`, would never show.
+		guard window?.attachedSheet == nil else {
+			return false
+		}
 		if let command = ReplicaFeature.TaskCommand(action: menuItem.action) {
 			return validate(menuItem, for: command)
 		}
@@ -543,27 +570,6 @@ public final class ReplicaWindowController: NSWindowController, NSMenuItemValida
 	@objc
 	func searchFieldChanged(_ searchField: NSSearchField) {
 		store.send(.binding(.set(\.searchText, searchField.stringValue)))
-	}
-
-	/// Asks for a date in Taskwarrior's syntax, and has every selected task wait until it.
-	@objc
-	func snoozeUntilCustomDate(_: Any?) {
-		beginSnoozeDateAlert()
-	}
-
-	@objc
-	func snoozeUntilNextWeek(_: Any?) {
-		store.send(.snoozeMenuItemSelected(.nextWeek))
-	}
-
-	@objc
-	func snoozeUntilTomorrow(_: Any?) {
-		store.send(.snoozeMenuItemSelected(.tomorrow))
-	}
-
-	@objc
-	func unsnooze(_: Any?) {
-		store.send(.unsnoozeMenuItemSelected)
 	}
 
 	/// Points the window at the Replica in `directory`, unless another window shows it, which comes
@@ -956,14 +962,6 @@ private final class ReplicaWindow: NSWindow {
 	}
 }
 
-extension ReplicaFeature.State {
-	/// Whether `command`'s menu items are enabled. The menu keeps the commands Mark Pending
-	/// replaces, disabled, where the toolbar hides them.
-	func isMenuEnabled(_ command: ReplicaFeature.TaskCommand) -> Bool {
-		enabledCommands.contains(command) && isOffered(command)
-	}
-}
-
 extension ReplicaFeature.TaskCommand {
 	/// In the order the Task menu and the toolbar list them.
 	static let all: [Self] = [.startStop, .done, .snooze, .delete, .markPending]
@@ -1093,6 +1091,7 @@ private let searchIdentifier = NSToolbarItem.Identifier("search")
 @MainActor
 private final class SnoozeItemDelegate: NSObject, NSMenuDelegate {
 	func menuWillOpen(_ menu: NSMenu) {
+		// Found as the target of one of Snooze's own items would be.
 		let controller = NSApp.target(
 			forAction: #selector(ReplicaWindowController.unsnooze(_:)),
 		) as? ReplicaWindowController

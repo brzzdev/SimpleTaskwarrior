@@ -307,6 +307,12 @@ struct ReplicaFeature {
 			}
 		}
 
+		/// Whether `command`'s menu items are enabled. The menu keeps the commands Mark Pending
+		/// replaces, disabled, where the toolbar hides them.
+		func isMenuEnabled(_ command: TaskCommand) -> Bool {
+			enabledCommands.contains(command) && isOffered(command)
+		}
+
 		/// Whether the toolbar and a row's context menu list `command`. Mark Pending takes the place of
 		/// the others where every selected fixed view is Completed or Deleted.
 		func isOffered(_ command: TaskCommand) -> Bool {

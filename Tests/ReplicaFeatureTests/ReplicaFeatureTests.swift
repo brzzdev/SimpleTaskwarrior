@@ -311,6 +311,9 @@ struct ReplicaFeatureTests {
 		let completed = storedTask(2, "File taxes", status: "completed", workingSetID: nil)
 		var state = try loadedState([pending, waiting, completed])
 
+		#expect(!state.enabledCommands.contains(.snooze))
+		#expect(!state.canUnsnooze)
+
 		state.selection = [UUID(0)]
 		#expect(state.enabledCommands.contains(.snooze))
 		#expect(!state.canUnsnooze)
