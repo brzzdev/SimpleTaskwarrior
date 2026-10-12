@@ -962,7 +962,7 @@ struct ReplicaFeature {
 				guard state.canUnsnooze else {
 					return .none
 				}
-				return writeWait(state.selectedWaitingIDs, "", &state)
+				return writeWait(state.selectedWaitingIDs, until: "", &state)
 
 			case .useTaskwarriorDefaultsButtonTapped:
 				state.isTaskrcHintPresented = false
@@ -1491,7 +1491,7 @@ struct ReplicaFeature {
 		guard state.enabledCommands.contains(.snooze) else {
 			return .none
 		}
-		return writeWait(state.selectedIDs, text, &state)
+		return writeWait(state.selectedIDs, until: text, &state)
 	}
 
 	/// Selects the task `offset` rows from the inspected one, as ⌘⌥↑ and ⌘⌥↓ do.
@@ -1592,20 +1592,6 @@ struct ReplicaFeature {
 		return TaskRow(isBlocked: false, task: task, udaColumns: [], urgency: 0, at: now)
 	}
 
-	/// Writes `wait` as `text` to the tasks `ids`, as an inspector Wait edit does, asking the same
-	/// Series question. Unlike one, it releases them from the table, even where an earlier edit kept
-	/// them, so they leave Pending or Waiting once it commits. One that fails keeps them.
-	private func writeWait(
-		_ ids: [Models.Task.ID],
-		_ text: String,
-		_ state: inout State,
-	) -> Effect<Action> {
-		// Snooze and Unsnooze start only where nothing else is writing or asking, so nothing else is
-		// releasing.
-		state.releasingTasks = Set(ids)
-		return write(.edit(ids, .setInput("wait", text: text)), &state)
-	}
-
 	/// Writes the Delete or edit that asked about Series, with the user's choices.
 	private func writePromptedSeries(_ state: inout State) -> Effect<Action> {
 		guard let prompt = state.seriesPrompt else {
@@ -1628,6 +1614,21 @@ struct ReplicaFeature {
 		case let .edit(edit):
 			return startWrite(.edit(prompt.ids, edit, series: prompt.series), at: now, &state)
 		}
+	}
+
+	/// Writes `wait` as `text` to the tasks `ids`, as an inspector Wait edit does, asking the same
+	/// Series question. Unlike that edit, it releases them from the table, even where an earlier edit
+	/// kept them, so they leave Pending or Waiting once the write commits. A write that fails keeps
+	/// them.
+	private func writeWait(
+		_ ids: [Models.Task.ID],
+		until text: String,
+		_ state: inout State,
+	) -> Effect<Action> {
+		// Snooze and Unsnooze start only where nothing else is writing or asking, so nothing else is
+		// releasing.
+		state.releasingTasks = Set(ids)
+		return write(.edit(ids, .setInput("wait", text: text)), &state)
 	}
 
 	/// Ranks the Replica's tasks with the Taskrc the window runs on, decoding their UDAs, computing
