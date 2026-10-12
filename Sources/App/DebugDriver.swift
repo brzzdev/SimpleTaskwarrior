@@ -329,10 +329,7 @@ final class DebugDriver {
 					throw Failure("no context menu")
 				}
 				menu.delegate?.menuNeedsUpdate?(menu)
-				guard let match = menu.item(withTitle: item) else {
-					throw Failure("no item \(item)")
-				}
-				try perform(match, in: window, from: view)
+				try perform(menuItem(at: item, in: menu), in: window, from: view)
 			}
 
 		case .dump:
@@ -350,11 +347,10 @@ final class DebugDriver {
 
 		case let .menu(menu, item):
 			return try await onWindow { window in
-				guard let match = NSApp.mainMenu?.item(withTitle: menu)?.submenu?.item(withTitle: item)
-				else {
-					throw Failure("no item \(menu) > \(item)")
+				guard let submenu = NSApp.mainMenu?.item(withTitle: menu)?.submenu else {
+					throw Failure("no menu \(menu)")
 				}
-				try perform(match, in: window)
+				try perform(menuItem(at: item, in: submenu), in: window)
 			}
 
 		case let .open(path):
@@ -399,6 +395,11 @@ final class DebugDriver {
 
 		case let .type(text):
 			return try await onWindow { window in
+				// A sheet's, where one is up. Never key, it hasn't yet focused its initial field.
+				let window = window.attachedSheet ?? window
+				if window.firstResponder === window, let field = window.initialFirstResponder {
+					window.makeFirstResponder(field)
+				}
 				guard let client = window.firstResponder as? any NSTextInputClient else {
 					throw Failure("the first responder takes no text")
 				}
@@ -508,6 +509,29 @@ private func descendants(of view: NSView?) -> [NSView] {
 		return []
 	}
 	return [view] + view.subviews.flatMap(descendants)
+}
+
+/// The item at `path` in `menu`: a title, or titles joined by " › " through submenus, each filled
+/// as it opens. A disabled submenu can't be opened, as by a click.
+@MainActor
+private func menuItem(at path: String, in menu: NSMenu) throws -> NSMenuItem {
+	var menu = menu
+	var titles = path.components(separatedBy: " › ")
+	let title = titles.removeLast()
+	for parentTitle in titles {
+		guard let parent = menu.item(withTitle: parentTitle), let submenu = parent.submenu else {
+			throw DebugDriver.Failure("no submenu \(parentTitle)")
+		}
+		guard parent.isEnabled else {
+			throw DebugDriver.Failure("\(parentTitle) is disabled")
+		}
+		submenu.delegate?.menuNeedsUpdate?(submenu)
+		menu = submenu
+	}
+	guard let item = menu.item(withTitle: title) else {
+		throw DebugDriver.Failure("no item \(path)")
+	}
+	return item
 }
 
 @MainActor

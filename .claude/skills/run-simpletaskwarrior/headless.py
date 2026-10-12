@@ -21,11 +21,12 @@ USAGE = """usage: headless.py COMMAND FIXTURE_DIR [ARG...]
   launch                 start a hidden instance for FIXTURE_DIR; run `just build` first
   open REPLICA_DIR       open a Replica
   choose PATH            the next open panel picks PATH without showing
-  menu MENU ITEM         a main menu item, e.g. File "Choose Taskrc…"
-  context ITEM [ROW]     an item in the header's menu, or in the menu on table row ROW
+  menu MENU ITEM         a main menu item, e.g. File "Choose Taskrc…", or Task "Snooze › Tomorrow"
+  context ITEM [ROW]     an item in the header's menu, or in the menu on table row ROW; " › "
+                         joins submenu titles, as for `menu`
   click ROW [COLUMN_ID]  the middle of a table cell, the first column by default
   key CHARS [MODIFIER…]  e.g. `key n command`; MODIFIERs: command control option shift
-  type TEXT              into the first responder
+  type TEXT              into the first responder, the sheet's where one is up
   sheet BUTTON           a button on the window's sheet
   frame WIDTH HEIGHT     the window's content size
   shot PNG               the window, rendered at the display's scale
