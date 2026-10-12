@@ -12,17 +12,16 @@ enum TaskView: Hashable {
 	/// In sidebar order.
 	static let all: [Self] = [.pending, .waiting, .completed, .deleted]
 
-	/// The views `task` shows in at `now`, or none for a Recurrence template.
-	static func views(of task: Models.Task, at now: Date) -> Set<Self> {
+	/// The view `task` shows in at `now`, or nil for a Recurrence template, which none shows.
+	init?(_ task: Models.Task, at now: Date) {
 		guard !task.isTemplate else {
-			return []
+			return nil
 		}
 		switch task.status {
-		case .completed: return [.completed]
-		case .deleted: return [.deleted]
-		case .pending where task.isWaiting(at: now): return [.waiting]
-		case .pending: return [.pending]
-		case .recurring: return []
+		case .completed: self = .completed
+		case .deleted: self = .deleted
+		case .pending: self = task.isWaiting(at: now) ? .waiting : .pending
+		case .recurring: return nil
 		}
 	}
 }
@@ -64,7 +63,7 @@ struct Sidebar: Equatable {
 		let filter = SidebarFilter(selection, hiddenTags: hiddenTags)
 		let shown = rows.filter { !filter.hides($0) }
 		views = TaskView.all.map { view in
-			Count(count: shown.count { $0.views.contains(view) }, item: .view(view))
+			Count(count: shown.count { $0.view == view }, item: .view(view))
 		}
 		let listed = shown.filter(filter.isInSelectedViews)
 
@@ -104,7 +103,7 @@ struct SidebarFilter {
 	var hiddenTags: Set<String>
 	var projects: [String] = []
 	var tags: [String] = []
-	/// The selected fixed views. The window's selection always has one.
+	/// The selected fixed views.
 	var views: Set<TaskView> = []
 
 	init(_ selection: Set<SidebarItem>, hiddenTags: Set<String> = []) {
@@ -134,7 +133,7 @@ struct SidebarFilter {
 
 	/// Whether `row` is in any selected view.
 	func isInSelectedViews(_ row: TaskRow) -> Bool {
-		!views.isDisjoint(with: row.views)
+		views.contains(row.view)
 	}
 }
 

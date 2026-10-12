@@ -269,7 +269,7 @@ struct ReplicaFeature {
 
 		/// The selected tasks that are waiting, which Unsnooze writes, in the table's order.
 		var selectedWaitingIDs: [Models.Task.ID] {
-			selectedIDs.filter { rows[id: $0]?.views.contains(.waiting) == true }
+			selectedIDs.filter { rows[id: $0]?.view == .waiting }
 		}
 
 		var sidebar: Sidebar {

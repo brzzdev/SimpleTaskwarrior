@@ -2676,7 +2676,6 @@ struct ReplicaFeatureTests {
 	func releasingAnEditKeptTaskDropsItFromItsView(
 		bike: StoredTask,
 		view: TaskView,
-		button: ReplicaFeature.Action,
 	) async throws {
 		let tagged = StoredTask(
 			properties: bike.properties.merging(["tag_outdoor": "x"]) { $1 },
@@ -2702,7 +2701,7 @@ struct ReplicaFeatureTests {
 
 		await store.send(.inspectorFieldSubmitted([UUID(0)], .addTags(["outdoor"])))
 		await store.receive(\.writeCommitted)
-		await store.send(button)
+		await store.send(.markPendingButtonTapped)
 		await store.receive(\.writeCommitted)
 
 		#expect(store.state.rows.isEmpty)
@@ -2713,7 +2712,6 @@ struct ReplicaFeatureTests {
 	func aReleasingWriteThatFailsKeepsWhatAnEditKept(
 		bike: StoredTask,
 		view: TaskView,
-		button: ReplicaFeature.Action,
 	) async throws {
 		var bike = bike
 		bike.properties["project"] = "Home"
@@ -2744,7 +2742,7 @@ struct ReplicaFeatureTests {
 		// Moves the task out of Home, which only the keep holds it in.
 		await store.send(.inspectorFieldSubmitted([UUID(0)], .set("project", .string("Work"))))
 		await store.receive(\.writeCommitted)
-		await store.send(button)
+		await store.send(.markPendingButtonTapped)
 		await store.receive(\.writeFailed)
 		await store.send(.writeFailureDismissed)
 
@@ -3170,19 +3168,10 @@ private struct TaskStreams {
 /// When every test task was entered, so none has aged.
 private let now = Date(timeIntervalSince1970: 1_790_000_000)
 
-/// Each write that releases a task an edit kept: the task, the view it leaves, and the button
-/// that writes it.
-private let releasingWrites: [(StoredTask, TaskView, ReplicaFeature.Action)] = [
-	(
-		storedTask(0, "Fix the bike", status: "completed", workingSetID: nil),
-		.completed,
-		.markPendingButtonTapped,
-	),
-	(
-		storedTask(0, "Fix the bike", status: "deleted", workingSetID: nil),
-		.deleted,
-		.markPendingButtonTapped,
-	),
+/// Each closed task Mark Pending releases once an edit kept it: the task, and the view it leaves.
+private let releasingWrites: [(StoredTask, TaskView)] = [
+	(storedTask(0, "Fix the bike", status: "completed", workingSetID: nil), .completed),
+	(storedTask(0, "Fix the bike", status: "deleted", workingSetID: nil), .deleted),
 ]
 
 private let replicaDirectory = URL(filePath: "/Users/paul/.task", directoryHint: .isDirectory)

@@ -10,8 +10,8 @@ struct TaskRow: Equatable, Identifiable {
 	/// Where the task's value of each UDA with `values` falls in that list.
 	var udaRanks: [String: Int]
 	var urgency: Double
-	/// The fixed views the task shows in.
-	var views: Set<TaskView>
+	/// The fixed view the task shows in.
+	var view: TaskView
 
 	var id: Models.Task.ID {
 		task.id
@@ -30,10 +30,10 @@ struct TaskRow: Equatable, Identifiable {
 		urgency: Double,
 		at now: Date,
 	) {
-		views = TaskView.views(of: task, at: now)
-		guard !views.isEmpty else {
+		guard let view = TaskView(task, at: now) else {
 			return nil
 		}
+		self.view = view
 		self.isBlocked = isBlocked
 		self.task = task
 		// A value the list doesn't name ranks after every value it does.
