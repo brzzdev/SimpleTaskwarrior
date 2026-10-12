@@ -1804,7 +1804,7 @@ struct ReplicaFeatureTests {
 			$0.selection = []
 			$0.writeProgress = .running
 		}
-		// Active, so the CLI's start raised its Urgency.
+		// Started, so the CLI's start raised its Urgency.
 		await store.receive(\.tasksLoaded) {
 			$0.allRows = try [row(milkStarted, urgency: 4)]
 			$0.storedTasks = [milkStarted]
@@ -2653,14 +2653,8 @@ struct ReplicaFeatureTests {
 		let start = String(Int(now.timeIntervalSince1970))
 		let later = String(Int(now.timeIntervalSince1970) + 3_600)
 		let rows = try (0 ..< 5).map { seed in
-			try row(storedTask(
-				seed,
-				"Task \(seed)",
-				workingSetID: seed + 1,
-				seed < 2
-					? ["start": start]
-					: [:],
-			))
+			let properties = seed < 2 ? ["start": start] : [:]
+			return try row(storedTask(seed, "Task \(seed)", workingSetID: seed + 1, properties))
 		} + [row(storedTask(5, "Ring the client", workingSetID: 6, ["start": start, "wait": later]))]
 
 		let sidebar = Sidebar(hiddenTags: [], rows: rows, selection: [.view(.pending)])
@@ -2960,6 +2954,18 @@ struct ReplicaFeatureTests {
 			$0.hiddenTags = ["home"]
 			$0.sidebarSelection = [.view(.completed)]
 		}
+	}
+
+	@Test
+	func markPendingTakesTheOtherCommandsPlaceOnlyWhereEveryViewIsClosed() {
+		var state = ReplicaFeature.State(bookmark: Data())
+		state.sidebarSelection = [.view(.completed)]
+		#expect(state.isOffered(.markPending))
+		#expect(!state.isOffered(.done))
+
+		state.sidebarSelection = [.view(.completed), .view(.pending)]
+		#expect(!state.isOffered(.markPending))
+		#expect(state.isOffered(.done))
 	}
 
 	@Test

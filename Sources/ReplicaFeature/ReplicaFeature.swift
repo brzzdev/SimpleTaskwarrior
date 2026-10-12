@@ -76,7 +76,7 @@ struct ReplicaFeature {
 		var selection: Set<Models.Task.ID> = []
 		/// The Delete or edit asking whether to take the Series of each Recurrence instance it writes.
 		var seriesPrompt: SeriesPrompt?
-		/// Always holds a fixed view, which `SidebarFilter` relies on.
+		/// Always holds a fixed view, which `SidebarFilter` and `isOffered` rely on.
 		var sidebarSelection: Set<SidebarItem> = [.view(.pending)]
 		/// The table's sort, which the table autosaves per Replica and reports once it restores.
 		var sortOrder = [TaskSort(.urgency, order: .reverse)]
