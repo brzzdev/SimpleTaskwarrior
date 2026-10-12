@@ -2850,19 +2850,61 @@ struct ReplicaFeatureTests {
 	}
 
 	@Test
-	func otherDataLocationIsReportedOnlyForAnAttachedTaskrc() {
-		let taskrc = { (location: String) in
-			Taskrc(path: taskrcFile.path(), environment: .fixture) { path in
-				Taskrc.File(contents: "data.location=\(location)", realPath: path)
-			}
+	func closingTheDataLocationBannerHidesItForThatReplicaAndFolder() async throws {
+		@Dependency(\.defaultAppStorage) var defaults
+		let syncTask = URL(filePath: "/home/fixture/Sync/task/", directoryHint: .isDirectory)
+		let dismissal = ReplicaFeature.DataLocationDismissal(
+			dataLocation: syncTask,
+			replica: replicaDirectory,
+		)
+		var initialState = ReplicaFeature.State(bookmark: Data())
+		initialState.directory = replicaDirectory
+		initialState.taskrc = dataLocationTaskrc("~/Sync/task")
+		let store = TestStore(initialState: initialState) {
+			ReplicaFeature()
+		} withDependencies: {
+			$0.date.now = now
+			$0.timeZone = .gmt
 		}
+		#expect(store.state.otherDataLocation == "/home/fixture/Sync/task")
+
+		await store.send(.dataLocationBannerCloseButtonTapped) {
+			$0.$dataLocationDismissals.withLock { $0 = [dismissal] }
+		}
+		#expect(store.state.otherDataLocation == nil)
+		// What a relaunch reads back, rather than the reference this test shares.
+		let stored = try #require(defaults.data(forKey: "dataLocationDismissals"))
+		#expect(
+			try JSONDecoder().decode(Set<ReplicaFeature.DataLocationDismissal>.self, from: stored)
+				== [dismissal],
+		)
+
+		await store.send(.taskrcLoaded(dataLocationTaskrc("~/Sync/other"))) {
+			$0.taskrc = dataLocationTaskrc("~/Sync/other")
+		}
+		#expect(store.state.otherDataLocation == "/home/fixture/Sync/other")
+
+		// Another spelling of the folder closed before.
+		await store.send(.taskrcLoaded(dataLocationTaskrc("/home/fixture/Sync/./task/"))) {
+			$0.taskrc = dataLocationTaskrc("/home/fixture/Sync/./task/")
+		}
+		#expect(store.state.otherDataLocation == nil)
+
+		var otherReplica = ReplicaFeature.State(bookmark: Data())
+		otherReplica.directory = URL(filePath: "/Users/paul/.scratch/", directoryHint: .isDirectory)
+		otherReplica.taskrc = dataLocationTaskrc("~/Sync/task")
+		#expect(otherReplica.otherDataLocation == "/home/fixture/Sync/task")
+	}
+
+	@Test
+	func otherDataLocationIsReportedOnlyForAnAttachedTaskrc() {
 		var state = ReplicaFeature.State(bookmark: Data())
 		state.directory = replicaDirectory
 
-		state.taskrc = TaskrcClient.Loaded(taskrc: taskrc("/Users/paul/.task/"), url: taskrcFile)
+		state.taskrc = dataLocationTaskrc("/Users/paul/.task/")
 		#expect(state.otherDataLocation == nil)
 
-		state.taskrc = TaskrcClient.Loaded(taskrc: taskrc("~/Sync/task"), url: taskrcFile)
+		state.taskrc = dataLocationTaskrc("~/Sync/task")
 		#expect(state.otherDataLocation == "/home/fixture/Sync/task")
 
 		state.taskrc?.url = nil
@@ -2927,6 +2969,14 @@ extension AsyncStream where Element: Sendable {
 			continuation.finish()
 		}
 	}
+}
+
+/// The Taskrc at `taskrcFile`, attached, whose `data.location` is `location`.
+private func dataLocationTaskrc(_ location: String) -> TaskrcClient.Loaded {
+	let taskrc = Taskrc(path: taskrcFile.path(), environment: .fixture) { path in
+		Taskrc.File(contents: "data.location=\(location)", realPath: path)
+	}
+	return TaskrcClient.Loaded(taskrc: taskrc, url: taskrcFile)
 }
 
 /// A window on the Replica, showing `tasks` in the order given, as the table shows them on TW's

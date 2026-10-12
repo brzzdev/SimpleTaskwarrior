@@ -129,13 +129,6 @@ final class ReplicaContentController: NSViewController {
 			)
 		}
 		if store.isTaskrcHintPresented {
-			let close = NSButton(
-				image: NSImage(systemSymbolName: "xmark", accessibilityDescription: nil)!,
-				target: target,
-				action: #selector(Self.taskrcHintCloseButtonClicked(_:)),
-			)
-			close.isBordered = false
-			close.setAccessibilityLabel(String(localized: "Close"))
 			banners.append(
 				BannerView(
 					symbolName: "gearshape",
@@ -148,7 +141,10 @@ final class ReplicaContentController: NSViewController {
 							target: target,
 							action: #selector(Self.chooseTaskrcButtonClicked(_:)),
 						),
-						close,
+						closeButton(
+							target: target,
+							action: #selector(Self.taskrcHintCloseButtonClicked(_:)),
+						),
 					],
 				),
 			)
@@ -190,7 +186,12 @@ final class ReplicaContentController: NSViewController {
 					message: String(
 						localized: "The Taskrc's data.location is \(location), not this Replica.",
 					),
-					actions: [],
+					actions: [
+						closeButton(
+							target: target,
+							action: #selector(Self.dataLocationBannerCloseButtonClicked(_:)),
+						),
+					],
 				),
 			)
 		}
@@ -200,6 +201,11 @@ final class ReplicaContentController: NSViewController {
 	@objc
 	func chooseTaskrcButtonClicked(_: Any?) {
 		store.send(.chooseTaskrcButtonTapped)
+	}
+
+	@objc
+	func dataLocationBannerCloseButtonClicked(_: Any?) {
+		store.send(.dataLocationBannerCloseButtonTapped)
 	}
 
 	@objc
@@ -366,6 +372,19 @@ final class EmptyStateView: NSView {
 	required init?(coder: NSCoder) {
 		fatalError("init(coder:) has not been implemented")
 	}
+}
+
+/// A banner's borderless close button, which sends `action` to `target`.
+@MainActor
+private func closeButton(target: AnyObject?, action: Selector) -> NSButton {
+	let button = NSButton(
+		image: NSImage(systemSymbolName: "xmark", accessibilityDescription: nil)!,
+		target: target,
+		action: action,
+	)
+	button.isBordered = false
+	button.setAccessibilityLabel(String(localized: "Close"))
+	return button
 }
 
 /// The widest an empty state's message runs, for lines short enough to read.
