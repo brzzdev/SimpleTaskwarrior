@@ -3,5 +3,15 @@
   "extends": [
     "github>brzzdev/renovate-config:automerge",
     "github>brzzdev/renovate-config:swift"
+  ],
+  "packageRules": [
+    {
+      "description": "taskchampion pins Engine's rusqlite and `links = \"sqlite3\"` allows one libsqlite3-sys, so bumped apart they fail to resolve.",
+      "groupName": "TaskChampion",
+      "matchPackageNames": [
+        "rusqlite",
+        "taskchampion"
+      ]
+    }
   ]
 }
