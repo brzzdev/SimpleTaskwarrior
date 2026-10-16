@@ -3,5 +3,18 @@
   "extends": [
     "github>brzzdev/renovate-config:automerge",
     "github>brzzdev/renovate-config:swift"
+  ],
+  "packageRules": [
+    {
+      "description": "taskchampion and Engine share one rusqlite, since `links = \"sqlite3\"` allows one libsqlite3-sys in the graph. Bumped apart they fail to resolve, so one PR waits for the taskchampion release that moves rusqlite too.",
+      "groupName": "TaskChampion",
+      "matchManagers": [
+        "cargo"
+      ],
+      "matchPackageNames": [
+        "rusqlite",
+        "taskchampion"
+      ]
+    }
   ]
 }
