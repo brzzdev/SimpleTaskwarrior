@@ -18,14 +18,14 @@ alongside the `task` CLI: changes made in either show up in the other.
    export TUIST_DEVELOPMENT_TEAM=XXXXXXXXXX
    ```
 
-3. Install the developer tools (`just`, Tuist, Mint and the pinned SwiftLint,
-   and rustup for the engine). The build lints through Mint and fails without
-   it. `just engine` finds the brewed rustup, which installs the pinned Rust
-   toolchain on first use:
+3. Install [mise](https://mise.jdx.dev), then the developer tools in
+   `mise.toml` (`just`, Tuist, SwiftLint, SwiftFormat and the rest), the Rust
+   toolchain `rust-toolchain.toml` pins for the engine, and the git hooks. The
+   build lints through mise's SwiftLint and fails without it:
 
    ```sh
-   brew install just
-   just tools
+   mise trust
+   mise exec -- just tools
    ```
 
 4. Generate, build, run:
@@ -42,7 +42,7 @@ alongside the `task` CLI: changes made in either show up in the other.
 ## Development
 
 ```sh
-just tools     # brew bundle, mint packages and git hooks (once)
+just tools     # mise tools and git hooks (once)
 just engine    # build the Rust engine and regenerate its Swift bindings
 just test      # run the full test plan (xcodebuild, unsigned)
 just format    # SwiftFormat

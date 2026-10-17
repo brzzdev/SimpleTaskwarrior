@@ -107,14 +107,14 @@ let project = Project(
 			scripts: [
 				.pre(
 					script: """
-						export PATH="$PATH:/opt/homebrew/bin"
-						# Missing Mint fails the build, so a green build has always linted.
-						if ! which mint >/dev/null; then
-							echo "error: mint not installed — run 'just tools'"
+						export PATH="$HOME/.local/share/mise/shims:$PATH"
+						# Missing SwiftLint fails the build, so a green build has always linted.
+						if ! command -v swiftlint >/dev/null; then
+							echo "error: swiftlint not installed — run 'just tools'"
 							exit 1
 						fi
 						# `--config` makes a failed `parent_config` fetch fatal; see `just lint`.
-						mint run swiftlint --quiet --strict --config .swiftlint.yml
+						swiftlint --quiet --strict --config .swiftlint.yml
 						""",
 					name: "SwiftLint",
 					basedOnDependencyAnalysis: false,
