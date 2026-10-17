@@ -289,9 +289,15 @@ struct DateExpression {
 		let text =
 			switch value {
 			case let .date(date): clock.brokenDown(date).isoLocalExtended
+
 			case let .duration(duration): TaskDuration(seconds: duration).iso
+
 			case let .integer(integer): String(integer)
+
+			// TW writes a double in the C locale, and the result is parsed back as a date or duration.
+			// swiftlint:disable:next no_string_format
 			case let .real(real): String(format: "%g", real)
+
 			case let .string(string): String(decoding: string, as: UTF8.self)
 			}
 		return Array(text.utf8)
@@ -489,6 +495,8 @@ private func unsignedInt32(_ value: Int) -> Int {
 extension BrokenDownTime {
 	/// `Datetime::toISOLocalExtended`: `YYYY-MM-DDThh:mm:ss`.
 	var isoLocalExtended: String {
+		// TW parses this back as a date, in the C locale.
+		// swiftlint:disable:next no_string_format
 		String(
 			format: "%04d-%02d-%02dT%02d:%02d:%02d",
 			year,
