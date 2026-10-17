@@ -5,7 +5,7 @@ import TestSupport
 
 struct TaskrcTests {
 	@Test
-	func contextOnlyKeyIsReadByNameButNotEnumerated() {
+	func `context only key is read by name but not enumerated`() {
 		let taskrc = parse([
 			"/rc/taskrc": """
 				context=work
@@ -18,7 +18,7 @@ struct TaskrcTests {
 	}
 
 	@Test
-	func contextWriteKeepsProjectAndTagsAndSkipsTheRest() {
+	func `context write keeps project and tags and skips the rest`() {
 		let taskrc = parse([
 			"/rc/taskrc": """
 				context=work
@@ -36,7 +36,7 @@ struct TaskrcTests {
 	}
 
 	@Test
-	func includeReportsWhereItLookedAndWhyItFailed() {
+	func `include reports where it looked and why it failed`() {
 		let taskrc = parse(
 			[
 				"/rc/taskrc": """
@@ -67,7 +67,7 @@ struct TaskrcTests {
 	}
 
 	@Test
-	func includeResolvesAgainstTheIncludingFilesRealPath() {
+	func `include resolves against the including files real path`() {
 		let taskrc = parse(
 			[
 				"/dotfiles/extra.rc": "extra=yes",
@@ -81,7 +81,7 @@ struct TaskrcTests {
 	}
 
 	@Test
-	func includeSkipsOnlyAFileTaskwarriorBundles() {
+	func `include skips only a file taskwarrior bundles`() {
 		let taskrc = parse([
 			"/rc/mine.theme": "color.mine=red",
 			"/rc/taskrc": """
@@ -104,7 +104,7 @@ struct TaskrcTests {
 	}
 
 	@Test
-	func includeStopsPastTenLevels() {
+	func `include stops past ten levels`() {
 		let taskrc = parse([
 			"/rc/loop.rc": "include loop.rc",
 			"/rc/taskrc": "include loop.rc",
@@ -121,7 +121,7 @@ struct TaskrcTests {
 	}
 
 	@Test
-	func malformedLineIsReportedAndTheRestKept() {
+	func `malformed line is reported and the rest kept`() {
 		let taskrc = parse([
 			"/rc/taskrc": """
 				before=1
@@ -143,7 +143,7 @@ struct TaskrcTests {
 	}
 
 	@Test
-	func missingTaskrcLeavesTheDefaults() {
+	func `missing taskrc leaves the defaults`() {
 		let taskrc = parse([:])
 
 		#expect(
@@ -155,7 +155,7 @@ struct TaskrcTests {
 	}
 
 	@Test
-	func taskrcPathIsTASKRCExpandedElseTheHomeTaskrc() {
+	func `taskrc path is TASKRC expanded else the home taskrc`() {
 		var environment = Taskrc.Environment.fixture
 		#expect(environment.taskrcPath == "/home/fixture/.taskrc")
 
@@ -167,7 +167,7 @@ struct TaskrcTests {
 	}
 
 	@Test
-	func unsetVariablesAreReportedWithTheirKey() {
+	func `unset variables are reported with their key`() {
 		let taskrc = parse(["/rc/taskrc": "data.location=$XDG_DATA_HOME/task$SUFFIX"])
 
 		#expect(
@@ -182,7 +182,7 @@ struct TaskrcTests {
 	}
 
 	@Test
-	func validationReadsThroughTheContext() {
+	func `validation reads through the context`() {
 		let taskrc = parse([
 			"/rc/taskrc": """
 				context=work
@@ -213,7 +213,7 @@ struct TaskrcTests {
 	}
 
 	@Test(arguments: ["bom", "context", "defaults", "expansion", "includes", "syntax"])
-	func valuesMatchTaskShow(fixture: String) throws {
+	func `values match task show`(fixture: String) throws {
 		let directory = try #require(Bundle.module.url(forResource: "Fixtures", withExtension: nil))
 			.appending(path: fixture)
 		let expected = try String(contentsOf: directory.appending(path: "expected.rc"), encoding: .utf8)

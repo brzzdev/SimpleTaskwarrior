@@ -22,7 +22,7 @@ import TestSupport
 ))
 struct ContentSnapshotTests {
 	@Test
-	func dataLocationBanner() {
+	func `data location banner`() {
 		var state = ReplicaFeature.State(bookmark: Data())
 		state.directory = replicaDirectory
 		let taskrc = Taskrc(path: taskrcFile.path(), environment: .fixture) { path in
@@ -54,7 +54,7 @@ struct ContentSnapshotTests {
 	}
 
 	@Test
-	func inspectorAnnotationLinks() throws {
+	func `inspector annotation links`() throws {
 		let now = Date(timeIntervalSince1970: 1_790_000_000)
 		var task = Models.Task(
 			description: "Read a book",
@@ -85,7 +85,7 @@ struct ContentSnapshotTests {
 	}
 
 	@Test
-	func narrowFailure() {
+	func `narrow failure`() {
 		let view = EmptyStateView(
 			symbolName: "exclamationmark.triangle",
 			title: String(localized: "Can't Open Replica"),
@@ -95,7 +95,7 @@ struct ContentSnapshotTests {
 	}
 
 	@Test
-	func problemBanner() {
+	func `problem banner`() {
 		// No folder, so TW's default data.location doesn't add its own banner.
 		var state = ReplicaFeature.State(bookmark: Data())
 		state.taskrc = TaskrcClient.Loaded(
@@ -110,7 +110,7 @@ struct ContentSnapshotTests {
 	}
 
 	@Test
-	func saveFailureBanner() {
+	func `save failure banner`() {
 		var state = ReplicaFeature.State(bookmark: Data())
 		state.taskrcSaveFailure = ReplicaFeature.TaskrcSaveFailure(
 			message: "The file “.taskrc” couldn’t be opened.",
@@ -120,7 +120,7 @@ struct ContentSnapshotTests {
 	}
 
 	@Test
-	func taskrcHintBanner() {
+	func `taskrc hint banner`() {
 		var state = ReplicaFeature.State(bookmark: Data())
 		state.isTaskrcHintPresented = true
 		assertBannerSnapshots(of: state)

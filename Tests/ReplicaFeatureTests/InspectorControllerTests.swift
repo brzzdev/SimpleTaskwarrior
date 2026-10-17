@@ -8,7 +8,7 @@ import Testing
 @MainActor
 struct InspectorControllerTests {
 	@Test
-	func selectingATaskTallerThanThePaneKeepsTheWindowsFrame() async throws {
+	func `selecting a task taller than the pane keeps the windows frame`() async throws {
 		let task = Models.Task(
 			description: "Read a book",
 			id: UUID(0),

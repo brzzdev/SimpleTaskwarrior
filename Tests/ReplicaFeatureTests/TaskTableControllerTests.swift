@@ -12,7 +12,7 @@ import TestSupport
 @MainActor
 struct TaskTableControllerTests {
 	@Test
-	func idAndUrgencyFitTheRowsShown() async throws {
+	func `id and urgency fit the rows shown`() async throws {
 		let autosaveName = "test:\(UUID())"
 		defer {
 			removeAutosave(autosaveName)
@@ -77,7 +77,7 @@ struct TaskTableControllerTests {
 	}
 
 	@Test
-	func restoredLayoutDrawsColumnsInItsOrder() async throws {
+	func `restored layout draws columns in its order`() async throws {
 		let autosaveName = "test:\(UUID())"
 		defer {
 			removeAutosave(autosaveName)

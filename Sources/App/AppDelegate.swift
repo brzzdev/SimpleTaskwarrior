@@ -38,7 +38,7 @@ public final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate,
 		state: NSCoder,
 		// Escaping in `NSWindowRestoration`'s requirement, though this calls it at once.
 		// swiftlint:disable:next unneeded_escaping
-		completionHandler: @escaping (NSWindow?, (any Error)?) -> Void,
+		completionHandler: @escaping (NSWindow?, any Error?) -> Void,
 	) {
 		// A Replica already restored gets no second window, since AppKit expects a window per request.
 		// One that's gone still gets its window, which says so, at the path it was last at.

@@ -171,12 +171,10 @@ struct Datetime {
 						parseDateExtended(&pig) || parseTimeUTCExtended(&pig) || parseTimeUTC(&pig)
 							|| parseTimeOffsetExtended(&pig) || parseTimeExtended(&pig)
 					)
-			)
+			), validate()
 		{
-			if validate() {
-				resolve()
-				return pig.cursor
-			}
+			resolve()
+			return pig.cursor
 		}
 
 		pig.cursor = checkpoint

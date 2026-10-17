@@ -726,7 +726,9 @@ private struct Lexer {
 			cursor += literal.utf8.count
 			return literal
 		}
-		let (c1, c2, c3) = (byte(at: cursor + 1), byte(at: cursor + 2), byte(at: cursor + 3))
+		let c1 = byte(at: cursor + 1)
+		let c2 = byte(at: cursor + 2)
+		let c3 = byte(at: cursor + 3)
 		let isTriple = (matches("and") && isBoundary(c2, c3)) || (matches("xor") && isBoundary(c2, c3))
 			|| matches("!==")
 		let isDouble = ["!=", "!~", "&&", "<=", "==", ">=", "||"].contains(where: { matches($0) })

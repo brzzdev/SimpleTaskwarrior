@@ -89,7 +89,7 @@ final class DebugDriver {
 	/// Whether the app quits once the reply has gone out: quitting before then leaves the client with
 	/// no reply.
 	private var quitsAfterReply = false
-	private var windowObserver: (any NSObjectProtocol)?
+	private var windowObserver: any NSObjectProtocol?
 
 	init?(openWindow: @escaping (URL) async throws -> NSWindow?) {
 		guard let path = Self.socketPath else {

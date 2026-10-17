@@ -12,7 +12,7 @@ import TestSupport
 @MainActor
 struct ReplicaFeatureTests {
 	@Test
-	func bookmarkChangesFromAnotherWindowReloadTheTaskrc() async {
+	func `bookmark changes from another window reload the taskrc`() async {
 		let (changes, continuation) = AsyncStream<Void>.makeStream()
 		let pairedTaskrc = LockIsolated<URL?>(nil)
 		let store = TestStore(initialState: ReplicaFeature.State(bookmark: Data())) {
@@ -48,7 +48,7 @@ struct ReplicaFeatureTests {
 	}
 
 	@Test
-	func bulkDoneAsksOnceListingEveryChainItRepairs() async throws {
+	func `bulk done asks once listing every chain it repairs`() async throws {
 		// Beta and Beta 2 each break a chain of their own.
 		let tasks = chain() + chain(from: 3, suffix: " 2")
 		let initialState = try loadedState(tasks, selection: [UUID(1), UUID(4)])
@@ -73,7 +73,7 @@ struct ReplicaFeatureTests {
 	}
 
 	@Test
-	func bulkDeleteOfInstancesAsksOnceForEachSeries() async throws {
+	func `bulk delete of instances asks once for each series`() async throws {
 		let plants = series(0, "Water plants", instances: [1, 2])
 		let bins = series(3, "Take out bins", instances: [4])
 		var initialState = try loadedState(
@@ -101,7 +101,7 @@ struct ReplicaFeatureTests {
 	}
 
 	@Test
-	func bulkEditsNameTheirUndoPointAfterTheTasksTheyChange() async throws {
+	func `bulk edits name their undo point after the tasks they change`() async throws {
 		let milk = storedTask(0, "Buy milk", workingSetID: 1, ["tag_home": "x"])
 		let dog = storedTask(1, "Walk the dog", workingSetID: 2)
 		let plans = LockIsolated<[WritePlan]>([])
@@ -144,7 +144,8 @@ struct ReplicaFeatureTests {
 	}
 
 	@Test
-	func bulkTagRemovalQueuedBehindAnAddTakesTheTagFromEveryTaskTheAddTagged() async throws {
+	func `bulk tag removal queued behind an add takes the tag from every task the add tagged`(
+	) async throws {
 		let milk = storedTask(0, "Buy milk", workingSetID: 1, ["tag_home": "x"])
 		let dog = storedTask(1, "Walk the dog", workingSetID: 2)
 		let dogHome = storedTask(1, "Walk the dog", workingSetID: 2, ["tag_home": "x"])
@@ -193,7 +194,7 @@ struct ReplicaFeatureTests {
 	}
 
 	@Test
-	func bulkTagRemovalWritesEverySelectedTaskAtOnceAndKeepsThemUntilTheSelectionChanges(
+	func `bulk tag removal writes every selected task at once and keeps them until selection changes`(
 	) async throws {
 		let milk = storedTask(0, "Buy milk", workingSetID: 1, ["tag_home": "x"])
 		let dog = storedTask(1, "Walk the dog", workingSetID: 2, ["tag_home": "x"])
@@ -248,7 +249,7 @@ struct ReplicaFeatureTests {
 	}
 
 	@Test
-	func chainRepairPromptHoldsBackEveryOtherWrite() throws {
+	func `chain repair prompt holds back every other write`() throws {
 		var state = try loadedState(chain(), selection: [UUID(1)])
 		state.redoName = "Complete Task"
 		state.undoName = "Complete Task"
@@ -270,7 +271,7 @@ struct ReplicaFeatureTests {
 	}
 
 	@Test
-	func commandsAreEnabledOnlyWhenTheyApplyToEverySelectedTask() throws {
+	func `commands are enabled only when they apply to every selected task`() throws {
 		let pending = storedTask(0, "Buy milk", workingSetID: 1)
 		let active = storedTask(
 			1,
@@ -305,7 +306,7 @@ struct ReplicaFeatureTests {
 	}
 
 	@Test
-	func unsnoozeIsEnabledOnlyWhereASelectedTaskIsWaiting() throws {
+	func `unsnooze is enabled only where a selected task is waiting`() throws {
 		let pending = storedTask(0, "Buy milk", workingSetID: 1)
 		let waiting = storedTask(1, "Walk the dog", workingSetID: 2, ["wait": "1790600000"])
 		let completed = storedTask(2, "File taxes", status: "completed", workingSetID: nil)
@@ -332,7 +333,7 @@ struct ReplicaFeatureTests {
 	}
 
 	@Test
-	func snoozingTasksUntilTomorrowMovesThemToWaitingInOneUndoPoint() async throws {
+	func `snoozing tasks until tomorrow moves them to waiting in one undo point`() async throws {
 		let milk = storedTask(0, "Buy milk", workingSetID: 1)
 		let dog = storedTask(1, "Walk the dog", workingSetID: 2)
 		let plans = LockIsolated<[WritePlan]>([])
@@ -364,7 +365,7 @@ struct ReplicaFeatureTests {
 	}
 
 	@Test
-	func snoozingATaskAnEditKeptDropsItFromPendingOnceItCommits() async throws {
+	func `snoozing a task an edit kept drops it from pending once it commits`() async throws {
 		let milk = storedTask(0, "Buy milk", workingSetID: 1)
 		let plans = LockIsolated<[WritePlan]>([])
 		var initialState = try loadedState([milk], selection: [UUID(0)])
@@ -393,7 +394,7 @@ struct ReplicaFeatureTests {
 	}
 
 	@Test
-	func aSnoozeThatFailsKeepsWhatAnEditKept() async throws {
+	func `a snooze that fails keeps what an edit kept`() async throws {
 		let milk = storedTask(0, "Buy milk", workingSetID: 1)
 		let edited = storedTask(0, "Buy milk", workingSetID: 1, ["project": "Home"])
 		let attempts = LockIsolated(0)
@@ -430,7 +431,7 @@ struct ReplicaFeatureTests {
 	}
 
 	@Test
-	func snoozingUntilACustomDateWritesItAsTheInspectorsWaitWould() async throws {
+	func `snoozing until a custom date writes it as the inspectors wait would`() async throws {
 		let milk = storedTask(0, "Buy milk", workingSetID: 1)
 		let plans = LockIsolated<[WritePlan]>([])
 		let initialState = try loadedState([milk], selection: [UUID(0)])
@@ -461,7 +462,7 @@ struct ReplicaFeatureTests {
 	}
 
 	@Test
-	func snoozingAnInstanceChangesOnlyItLikeAnyDateButUntil() async throws {
+	func `snoozing an instance changes only it like any date but until`() async throws {
 		let plants = series(0, "Water plants", instances: [1, 2])
 		let plans = LockIsolated<[WritePlan]>([])
 		var initialState = try loadedState(plants.instances, selection: [UUID(1)])
@@ -493,7 +494,7 @@ struct ReplicaFeatureTests {
 	}
 
 	@Test
-	func snoozeAndUnsnoozeDoNothingWhereTheSelectionIsClosed() async throws {
+	func `snooze and unsnooze do nothing where the selection is closed`() async throws {
 		let completed = storedTask(0, "File taxes", status: "completed", workingSetID: nil)
 		let initialState = try loadedState([completed], selection: [UUID(0)])
 		let store = TestStore(initialState: initialState) {
@@ -506,7 +507,8 @@ struct ReplicaFeatureTests {
 	}
 
 	@Test
-	func unsnoozingClearsTheWaitOfTheSelectedWaitingTasksAndReturnsThemToPending() async throws {
+	func `unsnoozing clears the wait of the selected waiting tasks and returns them to pending`(
+	) async throws {
 		let milk = storedTask(0, "Buy milk", workingSetID: 1)
 		let dog = storedTask(1, "Walk the dog", workingSetID: 2, ["wait": "1790600000"])
 		let plans = LockIsolated<[WritePlan]>([])
@@ -541,7 +543,7 @@ struct ReplicaFeatureTests {
 	}
 
 	@Test
-	func copyDescriptionCopiesTheSelectedTasksOnePerLineInTheTablesOrder() throws {
+	func `copy description copies the selected tasks one per line in the tables order`() throws {
 		var state = try loadedState([
 			storedTask(2, "File taxes", workingSetID: 3),
 			storedTask(0, "Buy milk", workingSetID: 1),
@@ -558,7 +560,7 @@ struct ReplicaFeatureTests {
 	}
 
 	@Test
-	func doneThatBreaksAChainAsksBeforeRepairingIt() async throws {
+	func `done that breaks a chain asks before repairing it`() async throws {
 		let tasks = chain()
 		let plans = LockIsolated<[WritePlan]>([])
 		let initialState = try loadedState(tasks, selection: [UUID(1)])
@@ -618,7 +620,7 @@ struct ReplicaFeatureTests {
 	}
 
 	@Test
-	func deleteOfAnInstanceAsksWhetherToTakeItsSeries() async throws {
+	func `delete of an instance asks whether to take its series`() async throws {
 		let plants = series(0, "Water plants", instances: [1, 2])
 		let plans = LockIsolated<[WritePlan]>([])
 		let undoNames = LockIsolated<[String]>([])
@@ -674,7 +676,7 @@ struct ReplicaFeatureTests {
 
 	/// `task delete` asks only under `prompt`, and reads anything else as a boolean.
 	@Test(arguments: [("no", false), ("yes", true)])
-	func deleteOfAnInstanceFollowsTheTaskrcWithoutAsking(
+	func `delete of an instance follows the taskrc without asking`(
 		confirmation: String,
 		deletesSeries: Bool,
 	) async throws {
@@ -717,7 +719,7 @@ struct ReplicaFeatureTests {
 	}
 
 	@Test
-	func deletingASeriesAsksAboutTheChainsItsSiblingsBreak() async throws {
+	func `deleting a series asks about the chains its siblings break`() async throws {
 		let plants = series(0, "Water plants", instances: [1, 2])
 		let uuid = { (seed: Int) in UUID(seed).uuidString.lowercased() }
 		// Alpha depends on the sibling, which depends on Gamma.
@@ -775,7 +777,7 @@ struct ReplicaFeatureTests {
 	}
 
 	@Test
-	func bulkEditOfInstancesAsksOnceForEachSeriesAndWritesTheChoices() async throws {
+	func `bulk edit of instances asks once for each series and writes the choices`() async throws {
 		let plants = series(0, "Water plants", instances: [1, 2])
 		let bins = series(3, "Take out bins", instances: [4])
 		let plans = LockIsolated<[WritePlan]>([])
@@ -831,7 +833,7 @@ struct ReplicaFeatureTests {
 		TaskEdit.set("description", .string("Water plants")),
 		.setInput("due", text: "2030-01-01"),
 	])
-	func editThatLeavesTheSeriesAloneAsksNothing(edit: TaskEdit) async throws {
+	func `edit that leaves the series alone asks nothing`(edit: TaskEdit) async throws {
 		let plants = series(0, "Water plants", instances: [1, 2])
 		let plans = LockIsolated<[WritePlan]>([])
 		var initialState = try loadedState(plants.instances, selection: [UUID(1)])
@@ -864,7 +866,7 @@ struct ReplicaFeatureTests {
 
 	/// As `task modify` reads it: only `prompt` asks.
 	@Test(arguments: [("no", false), ("yes", true)])
-	func editOfAnInstanceFollowsTheTaskrcWithoutAsking(
+	func `edit of an instance follows the taskrc without asking`(
 		confirmation: String,
 		includesSeries: Bool,
 	) async throws {
@@ -910,7 +912,7 @@ struct ReplicaFeatureTests {
 	/// As `task modify` offers it: the selected instance may already have the value its Series lacks,
 	/// and a sibling the view hides is still in the Series.
 	@Test
-	func editOfAnInstanceAsksWhereOnlyItsHiddenSiblingWouldChange() async throws {
+	func `edit of an instance asks where only its hidden sibling would change`() async throws {
 		var plants = series(0, "Water plants", instances: [1, 2])
 		plants.instances[0].properties.merge(["tag_garden": "x", "tags": "garden"]) { $1 }
 		plants.template.properties.merge(["tag_garden": "x", "tags": "garden"]) { $1 }
@@ -955,7 +957,7 @@ struct ReplicaFeatureTests {
 	/// A sibling can't depend on itself, so the Series can't take the edit, but it's still offered
 	/// rather than quietly dropped.
 	@Test
-	func editOfAnInstanceTheSeriesCantTakeStillAsks() async throws {
+	func `edit of an instance the series cant take still asks`() async throws {
 		let plants = series(0, "Water plants", instances: [1, 2])
 		var initialState = try loadedState(plants.instances, selection: [UUID(1)])
 		initialState.storedTasks.append(plants.template)
@@ -979,7 +981,7 @@ struct ReplicaFeatureTests {
 
 	/// Taking the Series reports why it can't, where `task` would refuse the whole command.
 	@Test
-	func editOfAnInstanceTheSeriesCantTakeFailsWhereTheTaskrcTakesIt() async throws {
+	func `edit of an instance the series cant take fails where the taskrc takes it`() async throws {
 		let plants = series(0, "Water plants", instances: [1, 2])
 		let taskrc = Taskrc(path: taskrcFile.path(), environment: .fixture) { path in
 			Taskrc.File(contents: "recurrence.confirmation=yes", realPath: path)
@@ -1009,7 +1011,7 @@ struct ReplicaFeatureTests {
 	/// Asked as it starts, so an edit queued behind a running write asks once that write ends, and
 	/// the edits queued behind the question wait for the answer.
 	@Test
-	func editQueuedBehindAWriteAsksAboutItsSeriesOnceItStarts() async throws {
+	func `edit queued behind a write asks about its series once it starts`() async throws {
 		let plants = series(0, "Water plants", instances: [1, 2])
 		let plans = LockIsolated<[WritePlan]>([])
 		var initialState = try loadedState(plants.instances, selection: [UUID(1)])
@@ -1065,7 +1067,7 @@ struct ReplicaFeatureTests {
 	}
 
 	@Test
-	func doneClosesTasksInIDOrderWhateverTheTableOrder() async throws {
+	func `done closes tasks in ID order whatever the table order`() async throws {
 		let tasks = chain()
 		// Gamma above Beta, as a sort by description descending would show them.
 		let initialState = try loadedState(tasks.reversed(), selection: [UUID(1), UUID(2)])
@@ -1089,7 +1091,7 @@ struct ReplicaFeatureTests {
 	}
 
 	@Test
-	func doneRepairsAChainWithoutAskingWhereTheTaskrcSaysNotTo() async throws {
+	func `done repairs a chain without asking where the taskrc says not to`() async throws {
 		let tasks = chain()
 		let taskrc = Taskrc(path: taskrcFile.path(), environment: .fixture) { path in
 			Taskrc.File(contents: "dependency.confirmation=off", realPath: path)
@@ -1123,7 +1125,7 @@ struct ReplicaFeatureTests {
 	}
 
 	@Test
-	func doneCompletesTheSelectedTaskAndItLeavesTheList() async throws {
+	func `done completes the selected task and it leaves the list`() async throws {
 		let milk = storedTask(0, "Buy milk", workingSetID: 1)
 		let dog = storedTask(1, "Walk the dog", workingSetID: 2)
 		let milkDone = storedTask(0, "Buy milk", status: "completed", workingSetID: 1)
@@ -1172,7 +1174,7 @@ struct ReplicaFeatureTests {
 	}
 
 	@Test
-	func inspectorEditKeepsATaskItMovesOutUntilTheSelectionChanges() async throws {
+	func `inspector edit keeps a task it moves out until the selection changes`() async throws {
 		let milk = storedTask(0, "Buy milk", workingSetID: 1, ["tag_home": "x"])
 		let dog = storedTask(1, "Walk the dog", workingSetID: 2, ["tag_home": "x"])
 		let milkUntagged = storedTask(0, "Buy milk", workingSetID: 1)
@@ -1228,7 +1230,7 @@ struct ReplicaFeatureTests {
 	}
 
 	@Test
-	func inspectorEditsWhileAWriteRunsAreWrittenInTurnOnceItEnds() async throws {
+	func `inspector edits while a write runs are written in turn once it ends`() async throws {
 		let milk = storedTask(0, "Buy milk", workingSetID: 1)
 		let milkHome = storedTask(0, "Buy milk", workingSetID: 1, ["project": "Home"])
 		let (commits, commit) = AsyncStream<Void>.makeStream()
@@ -1287,7 +1289,7 @@ struct ReplicaFeatureTests {
 	}
 
 	@Test
-	func editDuringAChainRepairPromptWaitsForTheAnswer() async throws {
+	func `edit during a chain repair prompt waits for the answer`() async throws {
 		let tasks = chain()
 		let plans = LockIsolated<[WritePlan]>([])
 		var initialState = try loadedState(tasks, selection: [UUID(1)])
@@ -1327,7 +1329,7 @@ struct ReplicaFeatureTests {
 	}
 
 	@Test
-	func editQueuedBehindAChainRepairPromptDoesNotKeepTheTaskItCloses() async throws {
+	func `edit queued behind a chain repair prompt does not keep the task it closes`() async throws {
 		let tasks = chain()
 		var closed = tasks
 		closed[1].properties["status"] = "completed"
@@ -1365,7 +1367,8 @@ struct ReplicaFeatureTests {
 	}
 
 	@Test
-	func editQueuedBehindAChainRepairPromptKeepsTheTaskAFailedCloseLeavesOpen() async throws {
+	func `edit queued behind a chain repair prompt keeps the task a failed close leaves open`(
+	) async throws {
 		var tasks = chain()
 		tasks[1].properties["project"] = "Home"
 		var edited = tasks
@@ -1416,7 +1419,7 @@ struct ReplicaFeatureTests {
 	}
 
 	@Test
-	func annotationsAddedWithinASecondEachKeepTheirOwnSecond() async throws {
+	func `annotations added within a second each keep their own second`() async throws {
 		let second = Int(now.timeIntervalSince1970)
 		// The CLI already annotated it this second.
 		let milk = storedTask(0, "Buy milk", workingSetID: 1, ["annotation_\(second)": "Oat"])
@@ -1470,7 +1473,7 @@ struct ReplicaFeatureTests {
 	}
 
 	@Test
-	func inspectorTakesTheTaskASelectionIsNarrowedTo() async throws {
+	func `inspector takes the task a selection is narrowed to`() async throws {
 		let milk = storedTask(0, "Buy milk", workingSetID: 1)
 		let dog = storedTask(1, "Walk the dog", workingSetID: 2)
 		let milkDone = storedTask(0, "Buy milk", status: "completed", workingSetID: nil)
@@ -1497,7 +1500,7 @@ struct ReplicaFeatureTests {
 	}
 
 	@Test
-	func inspectorStaysOnATaskTheCLIMovesOutOfTheView() async throws {
+	func `inspector stays on a task the CLI moves out of the view`() async throws {
 		let milk = storedTask(0, "Buy milk", workingSetID: 1)
 		let dog = storedTask(1, "Walk the dog", workingSetID: 2)
 		let milkDone = storedTask(0, "Buy milk", status: "completed", workingSetID: nil)
@@ -1529,7 +1532,7 @@ struct ReplicaFeatureTests {
 	}
 
 	@Test
-	func inspectedTaskStaysEditableWhenASearchHidesIt() async throws {
+	func `inspected task stays editable when a search hides it`() async throws {
 		let milk = storedTask(0, "Buy milk", workingSetID: 1)
 		let dog = storedTask(1, "Walk the dog", workingSetID: 2)
 		let initialState = try loadedState([milk, dog])
@@ -1551,7 +1554,7 @@ struct ReplicaFeatureTests {
 	}
 
 	@Test
-	func nextAndPreviousTaskMoveFromTheInspectedTaskInTheTablesOrder() async throws {
+	func `next and previous task move from the inspected task in the tables order`() async throws {
 		let milk = storedTask(0, "Buy milk", workingSetID: 1)
 		let dog = storedTask(1, "Walk the dog", workingSetID: 2)
 		let initialState = try loadedState([milk, dog])
@@ -1578,7 +1581,7 @@ struct ReplicaFeatureTests {
 	}
 
 	@Test
-	func newTaskShowsInPendingAndIsSelectedOnceItsCreated() async throws {
+	func `new task shows in pending and is selected once its created`() async throws {
 		let taxes = storedTask(1, "File taxes", status: "completed", workingSetID: nil)
 		let milk = storedTask(0, "Buy milk", workingSetID: 1)
 		let plans = LockIsolated<[WritePlan]>([])
@@ -1627,7 +1630,7 @@ struct ReplicaFeatureTests {
 	}
 
 	@Test
-	func newTaskChecksItsSidebarAgainWhenTheTaskrcChangesBeforeReturn() async throws {
+	func `new task checks its sidebar again when the taskrc changes before return`() async throws {
 		func taskrc(defaultProject: String) -> TaskrcClient.Loaded {
 			let taskrc = Taskrc(path: taskrcFile.path(), environment: .fixture) { path in
 				Taskrc.File(contents: "default.project=\(defaultProject)", realPath: path)
@@ -1668,7 +1671,8 @@ struct ReplicaFeatureTests {
 	}
 
 	@Test
-	func newTaskShowsTheHiddenTagsItWouldCarryAsItOpensAndAsItsSubmitted() async throws {
+	func `new task shows the hidden tags it would carry as it opens and as its submitted`(
+	) async throws {
 		let taskrc = Taskrc(path: taskrcFile.path(), environment: .fixture) { path in
 			Taskrc.File(contents: "context=work\ncontext.work.write=+review\n", realPath: path)
 		}
@@ -1703,7 +1707,7 @@ struct ReplicaFeatureTests {
 	}
 
 	@Test
-	func newTaskWaitsForTheReplicaAndTheTaskrc() async {
+	func `new task waits for the replica and the taskrc`() async {
 		var initialState = ReplicaFeature.State(bookmark: Data())
 		initialState.directory = replicaDirectory
 		let store = TestStore(initialState: initialState) {
@@ -1727,7 +1731,7 @@ struct ReplicaFeatureTests {
 	}
 
 	@Test
-	func savingShowsAfterHalfASecondAndOtherWritesWaitUntilTheWriteEnds() async throws {
+	func `saving shows after half a second and other writes wait until it ends`() async throws {
 		let milk = storedTask(0, "Buy milk", workingSetID: 1)
 		let milkDone = storedTask(0, "Buy milk", status: "completed", workingSetID: 1)
 		let (commits, commit) = AsyncStream<Void>.makeStream()
@@ -1773,7 +1777,7 @@ struct ReplicaFeatureTests {
 	}
 
 	@Test
-	func stalePlanIsPlannedAgainAgainstTheTasksTheEngineRead() async throws {
+	func `stale plan is planned again against the tasks the engine read`() async throws {
 		let milk = storedTask(0, "Buy milk", workingSetID: 1)
 		let milkStarted = storedTask(
 			0,
@@ -1829,7 +1833,7 @@ struct ReplicaFeatureTests {
 	}
 
 	@Test
-	func stalePlanFailsTheWriteAfterThreeAttempts() async throws {
+	func `stale plan fails the write after three attempts`() async throws {
 		let milk = storedTask(0, "Buy milk", workingSetID: 1)
 		let attempts = LockIsolated(0)
 		let initialState = try loadedState([milk], selection: [UUID(0)])
@@ -1874,7 +1878,8 @@ struct ReplicaFeatureTests {
 	}
 
 	@Test
-	func failedWriteIsReportedAndTryAgainPlansItAgainWithTheSameUUIDAndTime() async throws {
+	func `failed write is reported and try again plans it again with the same UUID and time`(
+	) async throws {
 		let milk = storedTask(0, "Buy milk", workingSetID: 1)
 		let plans = LockIsolated<[WritePlan]>([])
 		var initialState = try loadedState([])
@@ -1934,7 +1939,7 @@ struct ReplicaFeatureTests {
 	}
 
 	@Test
-	func failedUndoIsReportedAndTryAgainUndoesAgain() async throws {
+	func `failed undo is reported and try again undoes again`() async throws {
 		let milk = storedTask(0, "Buy milk", workingSetID: 1)
 		let attempts = LockIsolated(0)
 		var initialState = try loadedState([milk])
@@ -1985,7 +1990,7 @@ struct ReplicaFeatureTests {
 	}
 
 	@Test
-	func undoTheEngineCantConfirmSaysItMayHaveLandedAndOffersNoRetry() async throws {
+	func `undo the engine cant confirm says it may have landed and offers no retry`() async throws {
 		var initialState = try loadedState([storedTask(0, "Buy milk", workingSetID: 1)])
 		initialState.undoName = "Complete Task"
 		let store = TestStore(initialState: initialState) {
@@ -2012,7 +2017,7 @@ struct ReplicaFeatureTests {
 	}
 
 	@Test
-	func readFailureShowsABannerAfterThirtySecondsUntilAReadSucceeds() async throws {
+	func `read failure shows a banner after thirty seconds until a read succeeds`() async throws {
 		let clock = TestClock()
 		var initialState = try loadedState([])
 		initialState.readIndex = 1
@@ -2048,7 +2053,7 @@ struct ReplicaFeatureTests {
 	}
 
 	@Test
-	func movedReplicaReopensSilentlyWithoutItsUndoOrRedo() async {
+	func `moved replica reopens silently without its undo or redo`() async {
 		let moved = URL(filePath: "/Users/paul/Sync/task", directoryHint: .isDirectory)
 		let identity = ReplicaIdentity(device: 1, inode: 2)
 		let location = LockIsolated(replicaDirectory)
@@ -2115,7 +2120,7 @@ struct ReplicaFeatureTests {
 	}
 
 	@Test
-	func movedReplicaAnotherWindowHasOpenStaysThatWindows() async throws {
+	func `moved replica another window has open stays that windows`() async throws {
 		let milk = storedTask(0, "Buy milk", workingSetID: 1)
 		let identity = ReplicaIdentity(device: 1, inode: 2)
 		let streams = TaskStreams()
@@ -2148,7 +2153,7 @@ struct ReplicaFeatureTests {
 	}
 
 	@Test
-	func replacedReplicaShowsWhyUntilOpenReplacementOpensIt() async throws {
+	func `replaced replica shows why until open replacement opens it`() async throws {
 		let milk = storedTask(0, "Buy milk", workingSetID: 1)
 		let moves = LockIsolated<[[URL]]>([])
 		let streams = TaskStreams()
@@ -2194,7 +2199,7 @@ struct ReplicaFeatureTests {
 	}
 
 	@Test
-	func missingReplicaOpensAtItsLastPathUntilLocateFindsIt() async {
+	func `missing replica opens at its last path until locate finds it`() async {
 		let located = URL(filePath: "/Users/paul/Sync/task", directoryHint: .isDirectory)
 		let moves = LockIsolated<[[URL]]>([])
 		let streams = TaskStreams()
@@ -2241,7 +2246,7 @@ struct ReplicaFeatureTests {
 	}
 
 	@Test
-	func writeThatFindsTheReplicaLostDropsEveryWriteWithoutAnAlert() async throws {
+	func `write that finds the replica lost drops every write without an alert`() async throws {
 		let milk = storedTask(0, "Buy milk", workingSetID: 1)
 		let identity = ReplicaIdentity(device: 1, inode: 2)
 		let clock = TestClock()
@@ -2293,7 +2298,7 @@ struct ReplicaFeatureTests {
 	}
 
 	@Test
-	func writeToATaskThatNoLongerExistsOffersOnlyOK() async throws {
+	func `write to a task that no longer exists offers only OK`() async throws {
 		let milk = storedTask(0, "Buy milk", workingSetID: 1)
 		let initialState = try loadedState([milk], selection: [UUID(0)])
 		let store = TestStore(initialState: initialState) {
@@ -2335,7 +2340,7 @@ struct ReplicaFeatureTests {
 	}
 
 	@Test
-	func snapshotReadBeforeTheLastIsDropped() async throws {
+	func `snapshot read before the last is dropped`() async throws {
 		let milk = storedTask(0, "Buy milk", workingSetID: 1)
 		let initialState = try loadedState([])
 		let store = TestStore(initialState: initialState) {
@@ -2356,7 +2361,7 @@ struct ReplicaFeatureTests {
 	}
 
 	@Test
-	func undoRevertsTheWindowsChangeAndSelectsTheTasksItChanged() async throws {
+	func `undo reverts the windows change and selects the tasks it changed`() async throws {
 		let milk = storedTask(0, "Buy milk", workingSetID: 1)
 		let dog = storedTask(1, "Walk the dog", workingSetID: 2)
 		var initialState = try loadedState([milk, dog])
@@ -2394,7 +2399,7 @@ struct ReplicaFeatureTests {
 	}
 
 	@Test
-	func failedSaveIsReportedAndTryAgainReopensThePanel() async {
+	func `failed save is reported and try again reopens the panel`() async {
 		struct Gone: LocalizedError {
 			var errorDescription: String? { "The file is gone." }
 		}
@@ -2423,7 +2428,7 @@ struct ReplicaFeatureTests {
 	}
 
 	@Test
-	func hintOffersATaskrcOnceAndTheMenuAttachesAndDetachesIt() async {
+	func `hint offers a taskrc once and the menu attaches and detaches it`() async {
 		let pairedTaskrc = LockIsolated<URL?>(nil)
 		let store = TestStore(initialState: ReplicaFeature.State(bookmark: Data())) {
 			ReplicaFeature()
@@ -2470,7 +2475,7 @@ struct ReplicaFeatureTests {
 	}
 
 	@Test
-	func listsPendingTasksSortedAndDropsSelectedTasksThatLeave() async {
+	func `lists pending tasks sorted and drops selected tasks that leave`() async {
 		let directory = URL(filePath: "/Users/paul/.task")
 		let (tasks, continuation) = AsyncThrowingStream<Result<TaskSnapshot, ReplicaError>, any Error>
 			.makeStream()
@@ -2527,7 +2532,7 @@ struct ReplicaFeatureTests {
 	}
 
 	@Test
-	func recomputesUrgencyEveryMinute() async {
+	func `recomputes urgency every minute`() async {
 		let (tasks, continuation) = AsyncThrowingStream<Result<TaskSnapshot, ReplicaError>, any Error>
 			.makeStream()
 		let clock = TestClock()
@@ -2577,7 +2582,7 @@ struct ReplicaFeatureTests {
 	}
 
 	@Test
-	func ranksTasksAndRanksThemAgainWhenTheTaskrcReloads() async {
+	func `ranks tasks and ranks them again when the taskrc reloads`() async {
 		let store = TestStore(initialState: ReplicaFeature.State(bookmark: Data())) {
 			ReplicaFeature()
 		} withDependencies: {
@@ -2624,7 +2629,7 @@ struct ReplicaFeatureTests {
 	}
 
 	@Test
-	func searchMatchesDescriptionsAndAnnotationsInAnyCaseAndWithoutDiacritics() async {
+	func `search matches descriptions and annotations in any case and without diacritics`() async {
 		let store = TestStore(initialState: ReplicaFeature.State(bookmark: Data())) {
 			ReplicaFeature()
 		} withDependencies: {
@@ -2649,7 +2654,7 @@ struct ReplicaFeatureTests {
 	}
 
 	@Test
-	func sidebarCountsAStartedTaskUnderPendingOrWaiting() throws {
+	func `sidebar counts a started task under pending or waiting`() throws {
 		let start = String(Int(now.timeIntervalSince1970))
 		let later = String(Int(now.timeIntervalSince1970) + 3_600)
 		let rows = try (0 ..< 5).map { seed in
@@ -2667,7 +2672,7 @@ struct ReplicaFeatureTests {
 	}
 
 	@Test(arguments: releasingWrites)
-	func releasingAnEditKeptTaskDropsItFromItsView(
+	func `releasing an edit kept task drops it from its view`(
 		bike: StoredTask,
 		view: TaskView,
 	) async throws {
@@ -2703,7 +2708,7 @@ struct ReplicaFeatureTests {
 	}
 
 	@Test(arguments: releasingWrites)
-	func aReleasingWriteThatFailsKeepsWhatAnEditKept(
+	func `a releasing write that fails keeps what an edit kept`(
 		bike: StoredTask,
 		view: TaskView,
 	) async throws {
@@ -2744,7 +2749,7 @@ struct ReplicaFeatureTests {
 	}
 
 	@Test
-	func sidebarListsProjectsAndTagsFromTheSelectedViewsAndKeepsSelectedOnes() throws {
+	func `sidebar lists projects and tags from the selected views and keeps selected ones`() throws {
 		let rows = try [
 			row(storedTask(0, "Dig", workingSetID: 1, ["project": "Home.Garden", "tag_phone": "x"])),
 			row(storedTask(1, "Sweep", workingSetID: 2, ["project": "Home"])),
@@ -2785,7 +2790,7 @@ struct ReplicaFeatureTests {
 	}
 
 	@Test
-	func sidebarCountsLeaveOutHiddenTagsAndAHiddenTagCountsWhatItHides() throws {
+	func `sidebar counts leave out hidden tags and a hidden tag counts what it hides`() throws {
 		let rows = try [
 			row(storedTask(0, "Chase", workingSetID: 1, ["tag_office": "x", "tag_review": "x"])),
 			row(storedTask(1, "Proofread", workingSetID: 2, ["tag_review": "x"])),
@@ -2836,7 +2841,7 @@ struct ReplicaFeatureTests {
 	}
 
 	@Test
-	func sidebarNarrowsWithOrInASectionAndAndAcrossThem() async {
+	func `sidebar narrows with or in a section and and across them`() async {
 		let store = TestStore(initialState: ReplicaFeature.State(bookmark: Data())) {
 			ReplicaFeature()
 		} withDependencies: {
@@ -2877,7 +2882,7 @@ struct ReplicaFeatureTests {
 	}
 
 	@Test
-	func hidingATagLeavesOutEveryTaskWithItAndDeselectsOnlyThatTag() async {
+	func `hiding a tag leaves out every task with it and deselects only that tag`() async {
 		let store = TestStore(initialState: ReplicaFeature.State(bookmark: Data())) {
 			ReplicaFeature()
 		} withDependencies: {
@@ -2927,7 +2932,7 @@ struct ReplicaFeatureTests {
 	}
 
 	@Test
-	func aSelectionLeftWithNoViewGainsPending() async {
+	func `a selection left with no view gains pending`() async {
 		let store = TestStore(initialState: ReplicaFeature.State(bookmark: Data())) {
 			ReplicaFeature()
 		} withDependencies: {
@@ -2957,7 +2962,7 @@ struct ReplicaFeatureTests {
 	}
 
 	@Test
-	func markPendingTakesTheOtherCommandsPlaceOnlyWhereEveryViewIsClosed() {
+	func `mark pending takes the other commands place only where every view is closed`() {
 		var state = ReplicaFeature.State(bookmark: Data())
 		state.sidebarSelection = [.view(.completed)]
 		#expect(state.isOffered(.markPending))
@@ -2969,7 +2974,7 @@ struct ReplicaFeatureTests {
 	}
 
 	@Test
-	func hidingATagLetsGoOfTheTasksAnEditKept() async throws {
+	func `hiding a tag lets go of the tasks an edit kept`() async throws {
 		let bike = storedTask(0, "Fix the bike", workingSetID: 1)
 		let taggedBike = storedTask(0, "Fix the bike", workingSetID: 1, ["tag_review": "x"])
 		var initialState = try loadedState([bike], selection: [UUID(0)])
@@ -2997,7 +3002,7 @@ struct ReplicaFeatureTests {
 	}
 
 	@Test
-	func sortDescriptorsRoundTripThroughTheTableColumnIdentifiers() {
+	func `sort descriptors round trip through the table column identifiers`() {
 		let sorts = [
 			TaskSort(.description),
 			TaskSort(.uda("estimate.hours"), order: .reverse),
@@ -3011,7 +3016,7 @@ struct ReplicaFeatureTests {
 	}
 
 	@Test
-	func sortPutsEmptyValuesLastEitherWayAndAUDAInItsValuesOrder() throws {
+	func `sort puts empty values last either way and a UDA in its values order`() throws {
 		let rows = try ["L", "H", nil, "M"].enumerated().map { index, priority in
 			try row(
 				storedTask(
@@ -3031,7 +3036,7 @@ struct ReplicaFeatureTests {
 	}
 
 	@Test
-	func tiedTasksWithoutAnIDHoldTheirOrderAcrossSnapshots() async {
+	func `tied tasks without an ID hold their order across snapshots`() async {
 		let store = TestStore(initialState: ReplicaFeature.State(bookmark: Data())) {
 			ReplicaFeature()
 		} withDependencies: {
@@ -3051,7 +3056,7 @@ struct ReplicaFeatureTests {
 	}
 
 	@Test
-	func waitingTaskMovesToPendingAsItsWaitPasses() async {
+	func `waiting task moves to pending as its wait passes`() async {
 		let (tasks, continuation) = AsyncThrowingStream<Result<TaskSnapshot, ReplicaError>, any Error>
 			.makeStream()
 		let clock = TestClock()
@@ -3092,7 +3097,7 @@ struct ReplicaFeatureTests {
 	}
 
 	@Test
-	func closingTheDataLocationBannerHidesItForThatReplicaAndFolder() async throws {
+	func `closing the data location banner hides it for that replica and folder`() async throws {
 		@Dependency(\.defaultAppStorage) var defaults
 		let syncTask = URL(filePath: "/home/fixture/Sync/task/", directoryHint: .isDirectory)
 		let dismissal = ReplicaFeature.DataLocationDismissal(
@@ -3139,7 +3144,7 @@ struct ReplicaFeatureTests {
 	}
 
 	@Test
-	func otherDataLocationIsReportedOnlyForAnAttachedTaskrc() {
+	func `other data location is reported only for an attached taskrc`() {
 		var state = ReplicaFeature.State(bookmark: Data())
 		state.directory = replicaDirectory
 
