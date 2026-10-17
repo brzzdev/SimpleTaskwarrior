@@ -9,7 +9,7 @@ struct ModelsTests {
 	static let fixtures = ["inherit", "urgency"]
 
 	@Test(arguments: fixtures)
-	func blockedRuleMatchesTask(fixture: String) throws {
+	func `blocked rule matches task`(fixture: String) throws {
 		let fixture = try Fixture(fixture)
 
 		let scan = DependencyScan(fixture.tasks)
@@ -19,7 +19,7 @@ struct ModelsTests {
 	}
 
 	@Test(arguments: fixtures)
-	func decodingMatchesTaskExport(fixture: String) throws {
+	func `decoding matches task export`(fixture: String) throws {
 		let fixture = try Fixture(fixture)
 		let tasks = Dictionary(
 			uniqueKeysWithValues: fixture.tasks.map { ($0.id.uuidString.lowercased(), $0) },
@@ -37,14 +37,14 @@ struct ModelsTests {
 	}
 
 	@Test(arguments: fixtures)
-	func templatesMatchTask(fixture: String) throws {
+	func `templates match task`(fixture: String) throws {
 		let fixture = try Fixture(fixture)
 
 		#expect(try Set(fixture.tasks.filter(\.isTemplate).map(\.id)) == fixture.uuids("templates"))
 	}
 
 	@Test(arguments: fixtures)
-	func urgencyMatchesTaskExport(fixture: String) throws {
+	func `urgency matches task export`(fixture: String) throws {
 		let fixture = try Fixture(fixture)
 
 		let urgencies = UrgencyCoefficients(fixture.taskrc)

@@ -40,13 +40,8 @@ release_dir := ".release"
 # The app `archive` exports, which `release` and `publish` notarize.
 release_app := release_dir / "export" / scheme + ".app"
 release_zip := release_dir / scheme + ".zip"
-# The one target `Engine/rust-toolchain.toml` installs.
+# The one target `rust-toolchain.toml` installs.
 engine_target := "aarch64-apple-darwin"
-# The Brewfile's rustup is keg-only, so it is off PATH unless the shell put it
-# there. Recipes prepend it, because Homebrew's `rust` formula puts a cargo in
-# /opt/homebrew/bin that ignores rust-toolchain.toml; rustup's proxies honour it,
-# from a recipe whose working directory is `Engine/`.
-rustup_bin := "/opt/homebrew/opt/rustup/bin"
 
 # List available recipes
 default:
@@ -62,7 +57,6 @@ engine:
 	#!/usr/bin/env bash
 	set -euo pipefail
 
-	export PATH="{{ rustup_bin }}:$PATH"
 	target={{ engine_target }}
 	cargo build --locked --release --target "$target" --package engine
 	library="target/$target/release/libengine.a"
@@ -100,7 +94,7 @@ engine:
 # Run the Rust engine's tests
 [working-directory: "Engine"]
 engine-test:
-	PATH="{{ rustup_bin }}:$PATH" cargo test --locked --target {{ engine_target }} --package engine
+	cargo test --locked --target {{ engine_target }} --package engine
 
 # Generate the Xcode project from Project.swift. The touch stamps the workspace
 # for `ensure-generated`: Tuist leaves unchanged files alone, so without it the
@@ -713,38 +707,22 @@ fetch-swiftformat-config:
 
 # Format code with SwiftFormat
 format: fetch-swiftformat-config
-	mint run swiftformat . --base-config {{ swiftformat_base }}
+	swiftformat . --base-config {{ swiftformat_base }}
 
 # Format only the staged Swift hunks (used by the lefthook pre-commit hook)
 [private]
 format-staged: fetch-swiftformat-config
-	#!/usr/bin/env bash
-	# `mint which` writes the path to stdout and its failures to stderr, so piping
-	# it into `tail` without pipefail swallows a 127 and yields an empty string. The
-	# formatter command would then start with a bare ` stdin`, and the pre-commit
-	# hook would pass while formatting nothing at all. The assignment sits in the
-	# `if` condition so `set -e` does not abort on it before the message is printed.
-	set -euo pipefail
-
-	if ! formatter="$(mint which swiftformat | tail -1)" || [ -z "$formatter" ]; then
-		echo "swiftformat not installed — run \`just tools\`." >&2
-		exit 1
-	fi
-
 	git-format-staged \
-		--formatter "$formatter stdin --stdinpath '{}' --base-config {{ swiftformat_base }}" \
+		--formatter "swiftformat stdin --stdinpath '{}' --base-config {{ swiftformat_base }}" \
 		"*.swift"
 
 # Install git hooks via lefthook
 install-hooks:
 	lefthook install
 
-# Install developer tools (mint packages + git hooks)
+# Install developer tools (mise tools + git hooks)
 tools:
-	# `brew bundle` first: it installs git-format-staged, which the hook
-	# `just install-hooks` wires up then shells out to on every commit.
-	brew bundle install
-	mint bootstrap
+	mise install
 	just install-hooks
 
 # Run SwiftLint
@@ -763,7 +741,7 @@ lint:
 	# of that table flip. The local overrides are inlined into `.swiftlint.yml`
 	# for the same reason a second file is a liability: a referenced local
 	# config that goes missing is ignored with a warning and a zero exit.
-	mint run swiftlint --strict --config .swiftlint.yml
+	swiftlint --strict --config .swiftlint.yml
 
 # Remove the SwiftPM build folder, which holds the pinned DerivedData too
 clean:

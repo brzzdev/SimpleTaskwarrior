@@ -123,7 +123,7 @@ struct WritePlannerTests {
 	]
 
 	@Test
-	func everyRecordingHasAnAction() throws {
+	func `every recording has an action`() throws {
 		let recordings = try FileManager.default
 			.subpathsOfDirectory(atPath: Recording.directory().path(percentEncoded: false))
 			.filter { $0.hasSuffix(".json") }
@@ -133,7 +133,7 @@ struct WritePlannerTests {
 	}
 
 	@Test(arguments: actions.keys.sorted())
-	func planMatchesTask(case name: String) throws {
+	func `plan matches task`(case name: String) throws {
 		let recording = try Recording(name)
 		let makeAction = try #require(Self.actions[name])
 		let action = try makeAction(recording)
@@ -173,7 +173,7 @@ struct WritePlannerTests {
 	/// A dependency the CLI adds to the closed task before the plan commits rewrites `depends`, which
 	/// the plan must expect to fail and be made again.
 	@Test
-	func repairExpectsTheClosedTasksDependencies() throws {
+	func `repair expects the closed tasks dependencies`() throws {
 		let recording = try Recording("chains/complete_middle")
 		let planner = WritePlanner(taskrc: recording.taskrc, timeZone: .gmt)
 		let beta = try recording.id("Beta")
@@ -193,7 +193,7 @@ struct WritePlannerTests {
 	}
 
 	@Test
-	func repairReportsEachChainItRepairs() throws {
+	func `repair reports each chain it repairs`() throws {
 		let recording = try Recording("chains/complete_fanned")
 		let planner = WritePlanner(taskrc: recording.taskrc, timeZone: .gmt)
 		let beta = try recording.id("Beta")
@@ -212,7 +212,7 @@ struct WritePlannerTests {
 	}
 
 	@Test
-	func completingALegacyWaitingTaskCompletesIt() throws {
+	func `completing a legacy waiting task completes it`() throws {
 		let planner = WritePlanner(taskrc: .defaults, timeZone: .gmt)
 		let id = UUID()
 		let now = Date(timeIntervalSince1970: 1_790_000_000)
@@ -229,7 +229,7 @@ struct WritePlannerTests {
 	}
 
 	@Test
-	func writingALegacyWaitingTaskMakesItPending() throws {
+	func `writing a legacy waiting task makes it pending`() throws {
 		let planner = WritePlanner(taskrc: .defaults, timeZone: .gmt)
 		let id = UUID()
 		let now = Date(timeIntervalSince1970: 1_790_000_000)
@@ -259,7 +259,7 @@ struct WritePlannerTests {
 	}
 
 	@Test
-	func contextWriteReportsWhatItSkips() throws {
+	func `context write reports what it skips`() throws {
 		let recording = try Recording("context/add")
 		let planner = WritePlanner(taskrc: recording.taskrc, timeZone: .gmt)
 
@@ -274,7 +274,7 @@ struct WritePlannerTests {
 
 	/// `task add` refuses both with "Additional text must be provided", writing nothing.
 	@Test(arguments: ["", " ", "   "])
-	func creatingATaskWithABlankDescriptionThrows(description: String) {
+	func `creating a task with a blank description throws`(description: String) {
 		let planner = WritePlanner(taskrc: .defaults, timeZone: .gmt)
 
 		#expect(throws: WritePlanError.blankDescription) {
@@ -284,7 +284,7 @@ struct WritePlannerTests {
 
 	/// `task annotate` refuses both with "Additional text must be provided", writing nothing.
 	@Test(arguments: ["", " ", "   "])
-	func annotatingATaskWithBlankTextThrows(text: String) {
+	func `annotating a task with blank text throws`(text: String) {
 		let planner = WritePlanner(taskrc: .defaults, timeZone: .gmt)
 		let id = UUID()
 
@@ -298,7 +298,7 @@ struct WritePlannerTests {
 	}
 
 	@Test
-	func editingAMissingTaskThrows() {
+	func `editing a missing task throws`() {
 		let planner = WritePlanner(taskrc: .defaults, timeZone: .gmt)
 		let id = UUID()
 
@@ -310,9 +310,10 @@ struct WritePlannerTests {
 	/// A cycle already in the snapshot, which only another client could have written. TW returns
 	/// before its search when the dependency is already there, so a re-plan plans nothing.
 	@Test
-	func addingADependencyAlreadyInACyclePlansNothing() throws {
+	func `adding a dependency already in a cycle plans nothing`() throws {
 		let planner = WritePlanner(taskrc: .defaults, timeZone: .gmt)
-		let (alpha, beta) = (UUID(), UUID())
+		let alpha = UUID()
+		let beta = UUID()
 		let tasks = [
 			alpha: ["dep_\(beta.uuidString.lowercased())": "x", "status": "pending"],
 			beta: ["dep_\(alpha.uuidString.lowercased())": "x", "status": "pending"],
@@ -326,9 +327,11 @@ struct WritePlannerTests {
 	/// So a dependency another writer adds to the chain meanwhile, closing a cycle, fails the plan:
 	/// every writer rewrites `depends` with the `dep_*` keys it mirrors.
 	@Test
-	func addingADependencyExpectsTheChainItSearched() throws {
+	func `adding a dependency expects the chain it searched`() throws {
 		let planner = WritePlanner(taskrc: .defaults, timeZone: .gmt)
-		let (alpha, beta, gamma) = (UUID(), UUID(), UUID())
+		let alpha = UUID()
+		let beta = UUID()
+		let gamma = UUID()
 		let gammaKey = "dep_\(gamma.uuidString.lowercased())"
 		let tasks = [
 			alpha: ["status": "pending"],
@@ -348,7 +351,7 @@ struct WritePlannerTests {
 
 	/// `task modify depends:` refuses both, writing nothing.
 	@Test
-	func addingADependencyOnItselfThrows() {
+	func `adding a dependency on itself throws`() {
 		let planner = WritePlanner(taskrc: .defaults, timeZone: .gmt)
 		let id = UUID()
 
@@ -360,9 +363,11 @@ struct WritePlannerTests {
 	/// Alpha depends on Beta, which depends on Gamma. TW follows a chain through tasks of any status,
 	/// so Beta being completed doesn't break it.
 	@Test(arguments: ["Beta", "Gamma"])
-	func addingADependencyThatClosesACycleThrows(dependent: String) {
+	func `adding a dependency that closes a cycle throws`(dependent: String) {
 		let planner = WritePlanner(taskrc: .defaults, timeZone: .gmt)
-		let (alpha, beta, gamma) = (UUID(), UUID(), UUID())
+		let alpha = UUID()
+		let beta = UUID()
+		let gamma = UUID()
 		let tasks = [
 			alpha: ["dep_\(beta.uuidString.lowercased())": "x", "status": "pending"],
 			beta: ["dep_\(gamma.uuidString.lowercased())": "x", "status": "completed"],
@@ -377,7 +382,7 @@ struct WritePlannerTests {
 
 	/// `task` refuses adding or removing a virtual tag, whose names are uppercase, writing nothing.
 	@Test(arguments: [(TaskEdit.addTags(["PENDING"]), "PENDING"), (.removeTag("BLOCKED"), "BLOCKED")])
-	func addingOrRemovingAReservedTagThrows(edit: TaskEdit, tag: String) {
+	func `adding or removing a reserved tag throws`(edit: TaskEdit, tag: String) {
 		let planner = WritePlanner(taskrc: .defaults, timeZone: .gmt)
 		let id = UUID()
 
@@ -388,7 +393,7 @@ struct WritePlannerTests {
 
 	/// Only the uppercase name is reserved.
 	@Test
-	func addingALowercaseVirtualTagNameWritesIt() throws {
+	func `adding a lowercase virtual tag name writes it`() throws {
 		let planner = WritePlanner(taskrc: .defaults, timeZone: .gmt)
 		let id = UUID()
 
@@ -404,7 +409,7 @@ struct WritePlannerTests {
 	/// A default resolves against the attributes the create has already set, as `wait:due-1wk`
 	/// resolves against the task's `due`.
 	@Test
-	func creatingATaskResolvesADefaultThatRefersToAnotherAttribute() throws {
+	func `creating a task resolves a default that refers to another attribute`() throws {
 		let taskrc = Taskrc(path: "/taskrc", environment: .fixture) { path throws(Taskrc.ReadError) in
 			Taskrc.File(
 				contents: """
@@ -427,7 +432,7 @@ struct WritePlannerTests {
 	/// `modified+1d`
 	/// would resolve without it, since TW reads an unset attribute plus a duration from now.
 	@Test
-	func creatingATaskResolvesADefaultThatRefersToItsModifiedStamp() throws {
+	func `creating a task resolves a default that refers to its modified stamp`() throws {
 		let taskrc = Taskrc(path: "/taskrc", environment: .fixture) { path throws(Taskrc.ReadError) in
 			Taskrc.File(
 				contents: """
@@ -452,7 +457,7 @@ struct WritePlannerTests {
 		("default.due", "bogus", DateInputError.invalid),
 		("default.scheduled", "easter", DateInputError.holiday("easter")),
 	])
-	func creatingATaskWithAnUnresolvedDefaultThrows(
+	func `creating a task with an unresolved default throws`(
 		key: String,
 		text: String,
 		error: DateInputError,
@@ -468,7 +473,7 @@ struct WritePlannerTests {
 	}
 
 	@Test
-	func creatingATaskInAContextThatWritesAReservedTagThrows() {
+	func `creating a task in a context that writes a reserved tag throws`() {
 		let planner = WritePlanner(taskrc: pendingContext, timeZone: .gmt)
 
 		#expect(throws: WritePlanError.reservedTag("PENDING")) {
@@ -478,7 +483,7 @@ struct WritePlannerTests {
 
 	/// A retry of a create that landed before the Context changed still plans nothing.
 	@Test
-	func recreatingATaskInAContextThatWritesAReservedTagPlansNothing() throws {
+	func `recreating a task in a context that writes a reserved tag plans nothing`() throws {
 		let planner = WritePlanner(taskrc: pendingContext, timeZone: .gmt)
 		let id = UUID()
 
@@ -493,7 +498,7 @@ struct WritePlannerTests {
 
 	/// Relative input means the moment the plan is made, not when it was typed.
 	@Test
-	func settingInputResolvesItAsPlanned() throws {
+	func `setting input resolves it as planned`() throws {
 		let planner = WritePlanner(taskrc: .defaults, timeZone: .gmt)
 		let id = UUID()
 
@@ -509,7 +514,7 @@ struct WritePlannerTests {
 	/// So a `due` the CLI changes before the plan commits fails it, rather than leaving `wait` a week
 	/// before the old one.
 	@Test
-	func settingInputThatRefersToAnAttributeExpectsIt() throws {
+	func `setting input that refers to an attribute expects it`() throws {
 		let planner = WritePlanner(taskrc: .defaults, timeZone: .gmt)
 		let id = UUID()
 
@@ -528,7 +533,7 @@ struct WritePlannerTests {
 	}
 
 	@Test
-	func settingDurationInputStoresItNormalised() throws {
+	func `setting duration input stores it normalised`() throws {
 		let taskrc = Taskrc(path: "/taskrc", environment: .fixture) { path throws(Taskrc.ReadError) in
 			Taskrc.File(contents: "uda.estimate.type=duration", realPath: path)
 		}
@@ -545,7 +550,7 @@ struct WritePlannerTests {
 	}
 
 	@Test
-	func settingEmptyInputRemovesTheAttribute() throws {
+	func `setting empty input removes the attribute`() throws {
 		let planner = WritePlanner(taskrc: .defaults, timeZone: .gmt)
 		let id = UUID()
 
@@ -559,7 +564,11 @@ struct WritePlannerTests {
 	}
 
 	@Test(arguments: [("due", "bogus", DateInputError.invalid), ("project", "tomorrow", .invalid)])
-	func settingInputThatDoesNotResolveThrows(property: String, text: String, error: DateInputError) {
+	func `setting input that does not resolve throws`(
+		property: String,
+		text: String,
+		error: DateInputError,
+	) {
 		let planner = WritePlanner(taskrc: .defaults, timeZone: .gmt)
 		let id = UUID()
 
@@ -574,7 +583,7 @@ struct WritePlannerTests {
 
 	/// The CLI reads a missing or invalid `imask` as 0, overwriting another instance's status.
 	@Test(arguments: ["1", "-1", "first", nil])
-	func completingAnInstanceWithAnUnusableImaskLeavesTheMask(imask: String?) throws {
+	func `completing an instance with an unusable imask leaves the mask`(imask: String?) throws {
 		let recording = try Recording("recurrence/complete_instance")
 		let planner = WritePlanner(taskrc: recording.taskrc, timeZone: .gmt)
 		let instance = try recording.instance()
@@ -592,7 +601,7 @@ struct WritePlannerTests {
 
 	/// `task modify due:` refuses it with "You cannot remove the due date from a recurring task."
 	@Test(arguments: [TaskEdit.set("due", nil), .setInput("due", text: "")])
-	func removingDueFromAnInstanceThrows(edit: TaskEdit) throws {
+	func `removing due from an instance throws`(edit: TaskEdit) throws {
 		let recording = try Recording("recurrence/set_description_of_instance")
 		let planner = WritePlanner(taskrc: recording.taskrc, timeZone: .gmt)
 		let instance = try recording.instance()
@@ -606,7 +615,7 @@ struct WritePlannerTests {
 	/// without
 	/// its `due`.
 	@Test
-	func removingDueExpectsNoRecur() throws {
+	func `removing due expects no recur`() throws {
 		let planner = WritePlanner(taskrc: .defaults, timeZone: .gmt)
 		let id = UUID()
 		let properties = ["due": "1893456000", "status": "pending"]
@@ -622,11 +631,12 @@ struct WritePlannerTests {
 
 	/// The CLI repairs only the chain of the instance it was asked to delete.
 	@Test
-	func deletingASeriesRepairsTheChainOfEachTaskItDeletes() throws {
+	func `deleting a series repairs the chain of each task it deletes`() throws {
 		let recording = try Recording("series/delete_series")
 		let planner = WritePlanner(taskrc: recording.taskrc, timeZone: .gmt)
 		let (deleted, sibling) = try (recording.deleted(), #require(recording.siblings().first))
-		let (blocked, blocking) = (UUID(), UUID())
+		let blocked = UUID()
+		let blocking = UUID()
 		var tasks = recording.before
 		tasks[blocking] = ["status": "pending"]
 		tasks[sibling]?["dep_\(blocking.uuidString.lowercased())"] = "x"
@@ -645,7 +655,7 @@ struct WritePlannerTests {
 
 	/// As a bulk Delete of two instances writes it, once for each.
 	@Test
-	func deletingTwoInstancesOfASeriesDeletesItOnce() throws {
+	func `deleting two instances of a series deletes it once`() throws {
 		let recording = try Recording("series/delete_series")
 		let planner = WritePlanner(taskrc: recording.taskrc, timeZone: .gmt)
 		let deleted = try recording.deleted()
@@ -663,7 +673,7 @@ struct WritePlannerTests {
 
 	/// `task delete` finds siblings by `parent` alone, so they go even once the template is gone.
 	@Test
-	func deletingASeriesWhoseTemplateIsGoneDeletesItsSiblings() throws {
+	func `deleting a series whose template is gone deletes its siblings`() throws {
 		let recording = try Recording("series/delete_series")
 		let planner = WritePlanner(taskrc: recording.taskrc, timeZone: .gmt)
 		let deleted = try recording.deleted()
@@ -683,7 +693,7 @@ struct WritePlannerTests {
 
 	/// As a bulk edit of two instances writes it, once for each.
 	@Test
-	func editingTwoInstancesOfASeriesEditsItOnce() throws {
+	func `editing two instances of a series edits it once`() throws {
 		let recording = try Recording("series/set_until_of_series")
 		let planner = WritePlanner(taskrc: recording.taskrc, timeZone: .gmt)
 		let instances = recording.pendingInstances()
@@ -702,9 +712,10 @@ struct WritePlannerTests {
 	/// So an instance the CLI generates from the old template before the plan commits fails it, even
 	/// where the edit changes no instance.
 	@Test
-	func editingOnlyATemplateExpectsItsMask() throws {
+	func `editing only a template expects its mask`() throws {
 		let planner = WritePlanner(taskrc: .defaults, timeZone: .gmt)
-		let (template, instance) = (UUID(), UUID())
+		let template = UUID()
+		let instance = UUID()
 		let tasks = [
 			instance: [
 				"imask": "0",
@@ -732,7 +743,7 @@ struct WritePlannerTests {
 
 	/// The CLI sets the date on every task in the Series, collapsing it onto one date.
 	@Test(arguments: ["due", "scheduled", "wait"])
-	func editingADateOfAnInstanceLeavesItsSeries(property: String) throws {
+	func `editing a date of an instance leaves its series`(property: String) throws {
 		let recording = try Recording("series/set_until_of_series")
 		let planner = WritePlanner(taskrc: recording.taskrc, timeZone: .gmt)
 		let instances = recording.pendingInstances()
@@ -767,7 +778,7 @@ struct WritePlannerTests {
 		(.setInput("until", text: "eom"), true),
 		(.setInput("wait", text: "tomorrow"), false),
 	])
-	func cascadesToSeries(edit: TaskEdit, cascades: Bool) {
+	func `cascades to series`(edit: TaskEdit, cascades: Bool) {
 		let taskrc = Taskrc(path: "/taskrc", environment: .fixture) { path throws(Taskrc.ReadError) in
 			Taskrc.File(
 				contents: "uda.estimate.type=duration\nuda.review.type=date\n",
@@ -779,7 +790,7 @@ struct WritePlannerTests {
 	}
 
 	@Test
-	func addingATagExpectsTheOtherTags() throws {
+	func `adding a tag expects the other tags`() throws {
 		let planner = WritePlanner(taskrc: .defaults, timeZone: .gmt)
 		let id = UUID()
 		let properties = ["status": "pending", "tag_home": "x", "tags": "home"]

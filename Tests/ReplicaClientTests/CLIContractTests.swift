@@ -12,9 +12,9 @@ import Testing
 	.timeLimit(.minutes(1)),
 )
 final class CLIContractTests: Sendable {
-	let directory = URL.temporaryDirectory.appending(path: UUID().uuidString)
-	let planner = WritePlanner(taskrc: .defaults, timeZone: .gmt)
-	let replicaClient = ReplicaClient.liveValue
+	private let directory = URL.temporaryDirectory.appending(path: UUID().uuidString)
+	private let planner = WritePlanner(taskrc: .defaults, timeZone: .gmt)
+	private let replicaClient = ReplicaClient.liveValue
 
 	/// The Replica `task` creates on its first command.
 	private var replica: URL {
@@ -32,7 +32,7 @@ final class CLIContractTests: Sendable {
 	}
 
 	@Test
-	func aCLIEditSinceTheAppsReadRefusesItsWrite() async throws {
+	func `a CLI edit since the apps read refuses its write`() async throws {
 		let uuid = try addTask("Buy milk")
 		var tasks = replicaClient.tasks(replica, nil).makeAsyncIterator()
 		let read = try #require(await tasks.next()?.get())
@@ -64,7 +64,7 @@ final class CLIContractTests: Sendable {
 	}
 
 	@Test
-	func anAppWriteCommitsBetweenATaskImportsCommits() async throws {
+	func `an app write commits between a task imports commits`() async throws {
 		let uuid = try addTask("Seed")
 		var tasks = replicaClient.tasks(replica, nil).makeAsyncIterator()
 		_ = try await tasks.next()
@@ -103,7 +103,7 @@ final class CLIContractTests: Sendable {
 	}
 
 	@Test
-	func taskReadsAndChangesAnAppWrite() async throws {
+	func `task reads and changes an app write`() async throws {
 		// The app opens a Replica but never creates one.
 		try addTask("Seed")
 		var tasks = replicaClient.tasks(replica, nil).makeAsyncIterator()
@@ -139,7 +139,7 @@ final class CLIContractTests: Sendable {
 	}
 
 	@Test
-	func taskUndoRevertsTheAppsWriteAsOneUndoPoint() async throws {
+	func `task undo reverts the apps write as one undo point`() async throws {
 		let uuid = try addTask("Buy milk")
 		var tasks = replicaClient.tasks(replica, nil).makeAsyncIterator()
 		let read = try #require(await tasks.next()?.get())

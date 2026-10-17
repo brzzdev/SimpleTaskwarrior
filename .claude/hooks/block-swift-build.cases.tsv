@@ -72,7 +72,7 @@ allow	swiftlint --strict
 allow	swift-format --version
 allow	swiftly install
 allow	tuist generate
-allow	mint run swiftformat .
+allow	swiftformat .
 allow	grep -r swift build.log
 allow	echo builds swift
 allow	git commit -m "fix swift build breakage"

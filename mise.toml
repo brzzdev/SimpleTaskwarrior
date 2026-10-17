@@ -1,0 +1,15 @@
+# Rust comes from rust-toolchain.toml, which mise reads only with this setting. A `rust`
+# entry here would set RUSTUP_TOOLCHAIN over that file, dropping its components and targets.
+[settings]
+idiomatic_version_file_enable_tools = ["rust"]
+
+[tools]
+gh = "latest"
+jq = "latest"
+just = "latest"
+lefthook = "latest"
+"npm:git-format-staged" = "latest"
+swiftformat = "latest"
+swiftlint = "latest"
+tuist = "latest"
+xcbeautify = "latest"

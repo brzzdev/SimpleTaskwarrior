@@ -13,6 +13,9 @@ concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
 
+env:
+  MISE_TRUSTED_CONFIG_PATHS: ${{ github.workspace }}
+
 jobs:
   test:
     name: Test
@@ -21,26 +24,38 @@ jobs:
     runs-on: xcode-27
     # A backstop for a wedged xcodebuild rather than a budget for a slow build,
     # so a hang does not run to GitHub's 6-hour default. A run with every cache
-    # cold took 18 minutes on 2026-09-30, 10 of them building Mint's packages;
-    # a warm run takes about 6. Re-measure it after adding a cold step.
+    # cold took 18 minutes on 2026-09-30, 10 of them building Mint's packages,
+    # which mise now downloads prebuilt; a warm run takes about 6. Re-measure it
+    # after adding a cold step.
     timeout-minutes: 30
     steps:
       - name: Checkout
         uses: actions/checkout@v7
 
-      - name: Install tools
-        run: brew bundle
+      # A RUSTUP_HOME of its own, so the cache holds just the toolchain that
+      # rust-toolchain.toml pins, not the image's. Set before mise, which installs
+      # the toolchain there.
+      - name: Point Rust caches
+        run: echo "RUSTUP_HOME=$HOME/.rustup-engine" >> "$GITHUB_ENV"
 
-      # Mint builds SwiftLint and SwiftFormat from source, which costs minutes on
-      # every cold run. The Mintfile pins both, so it is the whole cache key.
-      - name: Cache Mint packages
+      # Of CARGO_HOME, only the downloaded crates: the registry's index and
+      # archives (not `src/`, which cargo unpacks from them) and `git/`, never
+      # `.global-cache`, which is cargo's own SQLite bookkeeping. `target/` makes
+      # a run without dependency changes rebuild only the engine crate, and the
+      # restore key keeps most of it when the lockfile changes.
+      - name: Cache Rust toolchain and crates
         uses: actions/cache@v6
         with:
-          path: ~/.mint
-          key: mint-${{ runner.os }}-${{ hashFiles('Mintfile') }}
+          path: |
+            ~/.rustup-engine
+            ~/.cargo/registry/index
+            ~/.cargo/registry/cache
+            ~/.cargo/git
+            Engine/target
+          key: rust-${{ runner.os }}-${{ hashFiles('rust-toolchain.toml', 'Engine/Cargo.lock') }}
+          restore-keys: rust-${{ runner.os }}-
 
-      - name: Install pinned Mint packages
-        run: mint bootstrap
+      - uses: jdx/mise-action@v4
 
       - name: Skip macro fingerprint validation
         run: defaults write com.apple.dt.Xcode IDESkipMacroFingerprintValidation -bool YES
@@ -52,31 +67,6 @@ jobs:
       # tests run and neither signal masks the other.
       - name: Lint
         run: just lint
-
-      # A RUSTUP_HOME of its own, so the cache holds just the toolchain that
-      # Engine/rust-toolchain.toml pins, not the image's. rustup installs it on
-      # the first cargo call.
-      - name: Point Rust caches
-        if: '!cancelled()'
-        run: echo "RUSTUP_HOME=$HOME/.rustup-engine" >> "$GITHUB_ENV"
-
-      # Of CARGO_HOME, only the downloaded crates: the registry's index and
-      # archives (not `src/`, which cargo unpacks from them) and `git/`, never
-      # `.global-cache`, which is cargo's own SQLite bookkeeping. `target/` makes
-      # a run without dependency changes rebuild only the engine crate, and the
-      # restore key keeps most of it when the lockfile changes.
-      - name: Cache Rust toolchain and crates
-        if: '!cancelled()'
-        uses: actions/cache@v6
-        with:
-          path: |
-            ~/.rustup-engine
-            ~/.cargo/registry/index
-            ~/.cargo/registry/cache
-            ~/.cargo/git
-            Engine/target
-          key: rust-${{ runner.os }}-${{ hashFiles('Engine/rust-toolchain.toml', 'Engine/Cargo.lock') }}
-          restore-keys: rust-${{ runner.os }}-
 
       - name: Build engine
         if: '!cancelled()'

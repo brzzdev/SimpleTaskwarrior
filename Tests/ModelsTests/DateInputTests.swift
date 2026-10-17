@@ -29,7 +29,7 @@ struct DateInputTests {
 	]
 
 	@Test(arguments: ["custom", "default", "noiso"])
-	func inputsMatchTask(fixture: String) throws {
+	func `inputs match task`(fixture: String) throws {
 		let directory = try #require(Bundle.module.url(forResource: "DateFixtures", withExtension: nil))
 			.appending(path: fixture)
 		let taskrc = Taskrc(fixture: directory.appending(path: "taskrc"))
@@ -37,7 +37,10 @@ struct DateInputTests {
 
 		for line in expected.split(separator: "\n") {
 			let fields = line.split(separator: "\t", omittingEmptySubsequences: false).map(String.init)
-			let (zone, second, input, stored) = (fields[0], fields[1], fields[2], fields[3])
+			let zone = fields[0]
+			let second = fields[1]
+			let input = fields[2]
+			let stored = fields[3]
 			let (attribute, text) = try #require(input.firstIndex(of: ":").map {
 				(String(input[..<$0]), String(input[input.index(after: $0)...]))
 			})
@@ -63,7 +66,7 @@ struct DateInputTests {
 	}
 
 	@Test(arguments: ["monday", "sunday"])
-	func weeksRunMondayToSundayWhateverTheWeekstart(weekstart: String) throws {
+	func `weeks run monday to sunday whatever the weekstart`(weekstart: String) throws {
 		let dateInput = DateInput(taskrc: taskrc("weekstart=\(weekstart)"), timeZone: .gmt)
 		// A Sunday.
 		let now = try #require(ISO8601DateFormatter().date(from: "2026-09-27T12:00:00Z"))
@@ -83,7 +86,7 @@ struct DateInputTests {
 		(5_400, "90min"),
 		(90, "PT1M30S"),
 	])
-	func durationsDisplayInTheLargestExactUnit(seconds: Int, display: String) throws {
+	func `durations display in the largest exact unit`(seconds: Int, display: String) throws {
 		let duration = TaskDuration(seconds: seconds)
 
 		#expect(duration.description == display)
@@ -104,7 +107,11 @@ struct DateInputTests {
 		("Europe/London", 1_792_891_800, "2026-10-25T01:30Z"),
 		("Europe/London", 1_792_891_815, "2026-10-25T01:30:15Z"),
 	])
-	func isoLocalReadsBackAsTheSameSecond(zone: String, epoch: TimeInterval, text: String) throws {
+	func `iso local reads back as the same second`(
+		zone: String,
+		epoch: TimeInterval,
+		text: String,
+	) throws {
 		let timeZone = try #require(TimeZone(identifier: zone))
 		let dateInput = DateInput(taskrc: taskrc("dateformat=m/d/Y"), timeZone: timeZone)
 		let date = Date(timeIntervalSince1970: epoch)

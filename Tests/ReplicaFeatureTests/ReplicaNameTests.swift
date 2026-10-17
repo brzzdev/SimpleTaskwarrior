@@ -10,7 +10,7 @@ struct ReplicaNameTests {
 			("/Users/paul/Work/.task", "Work"),
 		],
 	)
-	func namingRule(path: String, expected: String) {
+	func `naming rule`(path: String, expected: String) {
 		let home = URL(filePath: "/Users/paul", directoryHint: .isDirectory)
 		let directory = URL(filePath: path, directoryHint: .isDirectory)
 		#expect(replicaName(of: directory, home: home) == expected)
