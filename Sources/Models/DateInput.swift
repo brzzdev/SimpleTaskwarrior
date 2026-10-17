@@ -80,6 +80,8 @@ extension Date {
 		}
 		let magnitude = abs(offset)
 		let sign = offset < 0 ? "-" : "+"
+		// TW parses this back as a date, in the C locale.
+		// swiftlint:disable:next no_string_format
 		return text + sign + String(
 			format: "%02d:%02d",
 			magnitude / secondsPerHour,

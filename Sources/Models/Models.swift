@@ -258,6 +258,8 @@ extension UDAValue {
 			if number.rounded() == number, abs(number) < 1e15 {
 				String(Int(number))
 			} else {
+				// TW stores and parses numbers in the C locale.
+				// swiftlint:disable:next no_string_format
 				String(format: "%g", number)
 			}
 
