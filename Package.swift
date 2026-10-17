@@ -11,7 +11,7 @@ let package = Package(
 	dependencies: [
 		.package(url: "https://github.com/pointfreeco/swift-composable-architecture", from: "1.26.2"),
 		// Direct because the app host detects a test run through `TestContext`.
-		.package(url: "https://github.com/pointfreeco/swift-issue-reporting", from: "2.1.1"),
+		.package(url: "https://github.com/pointfreeco/swift-issue-reporting", from: "2.1.2"),
 		// Direct for `observe`, which binds the AppKit views to their store.
 		.package(url: "https://github.com/pointfreeco/swift-navigation", from: "2.11.2"),
 		// Direct because MemberImportVisibility wants the declaring module imported
