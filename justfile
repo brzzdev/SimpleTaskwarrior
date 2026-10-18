@@ -10,12 +10,13 @@ destination := "platform=macOS"
 # graph. `build`, `test`, `run` and `clean` all share it, so they never build the
 # same code into two trees.
 #
-# It has to sit under `.build/`. Derived data carries `SourcePackages/checkouts`,
-# a full copy of every dependency's sources, and the shared SwiftFormat and
-# SwiftLint configs (brzzdev/Configs) exclude `.build` and nothing else of the
-# sort — anywhere else in the tree and `just format` and `just lint` walk into
-# the dependencies. `just clean` already removes `.build` wholesale, so the
-# pinned tree is covered there too.
+# It has to sit under `.build/`. Derived data carries
+# `SourcePackages/checkouts`, a full copy of every dependency's sources.
+# SwiftFormat skips `.build` by default and the shared SwiftLint config
+# (brzzdev/Configs) excludes it, but nothing else of the sort — anywhere else in
+# the tree and `just format` and `just lint` walk into the dependencies. `just
+# clean` already removes `.build` wholesale, so the pinned tree is covered there
+# too.
 #
 # Xcode.app keeps its own DerivedData under ~/Library, so a CLI build and an
 # Xcode build do not share one; the first after switching cold-compiles.
