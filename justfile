@@ -33,7 +33,7 @@ releases_url := "https://github.com/brzzdev/SimpleTaskwarrior/releases"
 # Repo-scoped because a path shared across repos lets two checkouts on different
 # config revisions fight over one file, each overwriting the other's mid-commit.
 swiftformat_base := "/tmp/swiftformat-base-SimpleTaskwarrior"
-swiftformat_url := "https://raw.githubusercontent.com/brzzdev/Configs/main/Configs/swiftformat"
+swiftformat_url := "https://raw.githubusercontent.com/brzzdev/Configs/main/Swift/swiftformat"
 # The Debug configuration's product name, which names the `.app` and executable `run` launches.
 debug_product := scheme + " Debug"
 notary_profile := "SimpleTaskwarrior"
