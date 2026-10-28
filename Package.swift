@@ -20,7 +20,7 @@ let package = Package(
 		// Image snapshots of the leaf content views, in `ReplicaFeatureTests`.
 		.package(url: "https://github.com/pointfreeco/swift-snapshot-testing", from: "1.19.7"),
 		// In-app updates, from the appcast `just publish` attaches to each GitHub release.
-		.package(url: "https://github.com/sparkle-project/Sparkle", from: "2.10.0"),
+		.package(url: "https://github.com/sparkle-project/Sparkle", from: "2.10.1"),
 	],
 	targets: [
 		// Assembled into `Engine/build/` by `just engine`, which also regenerates the
