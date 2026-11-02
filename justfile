@@ -1,3 +1,5 @@
+set default-list
+
 # Run recipes under bash with pipefail so a failing xcodebuild isn't masked by a
 # successful `| xcbeautify` (which would otherwise let CI go green on a red build).
 set shell := ["bash", "-euo", "pipefail", "-c"]
@@ -43,10 +45,6 @@ release_app := release_dir / "export" / scheme + ".app"
 release_zip := release_dir / scheme + ".zip"
 # The one target `rust-toolchain.toml` installs.
 engine_target := "aarch64-apple-darwin"
-
-# List available recipes
-default:
-	@just --list
 
 # Regenerates the bindings in `Sources/Engine` and assembles
 # `Engine/build/EngineFFI.xcframework`. Xcode.app has no build phase for this

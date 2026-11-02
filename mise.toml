@@ -6,7 +6,7 @@ idiomatic_version_file_enable_tools = ["rust"]
 [tools]
 gh = "latest"
 jq = "latest"
-just = "latest"
+just = "1.59.0"
 lefthook = "latest"
 "npm:git-format-staged" = "latest"
 swiftformat = "latest"
