@@ -55,7 +55,7 @@ jobs:
           key: rust-${{ runner.os }}-${{ hashFiles('rust-toolchain.toml', 'Engine/Cargo.lock') }}
           restore-keys: rust-${{ runner.os }}-
 
-      - uses: jdx/mise-action@f5be966e4a917d54244728e6a5fdcd1d93a35e6c # v5.2.6
+      - uses: jdx/mise-action@b44d12e7d0d8ee7461bb893e1b1993500433185b # v5.2.7
 
       - name: Skip macro fingerprint validation
         run: defaults write com.apple.dt.Xcode IDESkipMacroFingerprintValidation -bool YES
