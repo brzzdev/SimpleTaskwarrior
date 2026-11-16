@@ -6,7 +6,7 @@
   ],
   "packageRules": [
     {
-      "description": "Gives rusqlite patches their own bucket, so the newest minor, disabled below, can't hide them.",
+      "description": "Gives rusqlite patches their own bucket, so a disabled newer minor can't hide them.",
       "matchPackageNames": [
         "rusqlite"
       ],
