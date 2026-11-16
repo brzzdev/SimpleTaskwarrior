@@ -6,10 +6,14 @@
   ],
   "packageRules": [
     {
-      "description": "taskchampion pins Engine's rusqlite and `links = \"sqlite3\"` allows one libsqlite3-sys, so rusqlite moves by hand when taskchampion does.",
+      "description": "rusqlite must match the version taskchampion pins, so its minors move by hand with taskchampion.",
       "enabled": false,
       "matchPackageNames": [
         "rusqlite"
+      ],
+      "matchUpdateTypes": [
+        "major",
+        "minor"
       ]
     }
   ]
