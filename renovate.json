@@ -6,7 +6,14 @@
   ],
   "packageRules": [
     {
-      "description": "rusqlite must match the version taskchampion pins, so its minors move by hand with taskchampion.",
+      "description": "Gives rusqlite patches their own bucket, so the newest minor, disabled below, can't hide them.",
+      "matchPackageNames": [
+        "rusqlite"
+      ],
+      "separateMinorPatch": true
+    },
+    {
+      "description": "rusqlite must match the version taskchampion pins, so its minors and majors move by hand with taskchampion.",
       "enabled": false,
       "matchPackageNames": [
         "rusqlite"
