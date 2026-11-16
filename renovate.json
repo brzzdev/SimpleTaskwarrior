@@ -6,11 +6,10 @@
   ],
   "packageRules": [
     {
-      "description": "taskchampion pins Engine's rusqlite and `links = \"sqlite3\"` allows one libsqlite3-sys, so bumped apart they fail to resolve.",
-      "groupName": "TaskChampion",
+      "description": "taskchampion pins Engine's rusqlite and `links = \"sqlite3\"` allows one libsqlite3-sys, so rusqlite moves by hand when taskchampion does.",
+      "enabled": false,
       "matchPackageNames": [
-        "rusqlite",
-        "taskchampion"
+        "rusqlite"
       ]
     }
   ]
