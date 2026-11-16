@@ -6,11 +6,21 @@
   ],
   "packageRules": [
     {
-      "description": "taskchampion pins Engine's rusqlite and `links = \"sqlite3\"` allows one libsqlite3-sys, so bumped apart they fail to resolve.",
-      "groupName": "TaskChampion",
+      "description": "Gives rusqlite patches their own bucket, so a disabled newer minor can't hide them.",
       "matchPackageNames": [
-        "rusqlite",
-        "taskchampion"
+        "rusqlite"
+      ],
+      "separateMinorPatch": true
+    },
+    {
+      "description": "rusqlite must match the version taskchampion pins, so its minors and majors move by hand with taskchampion.",
+      "enabled": false,
+      "matchPackageNames": [
+        "rusqlite"
+      ],
+      "matchUpdateTypes": [
+        "major",
+        "minor"
       ]
     }
   ]
