@@ -146,8 +146,14 @@ final class TaskTableController: NSViewController, NSMenuDelegate, NSMenuItemVal
 		rows.count + rowOffset
 	}
 
-	func tableView(_: NSTableView, shouldSelectRow row: Int) -> Bool {
-		self.row(at: row) != nil
+	/// Leaves out the new-task row, and leaves the selection as it was where that's all a click
+	/// proposed.
+	func tableView(
+		_: NSTableView,
+		selectionIndexesForProposedSelection proposed: IndexSet,
+	) -> IndexSet {
+		let tasks = proposed.filteredIndexSet { row(at: $0) != nil }
+		return tasks.isEmpty && !proposed.isEmpty ? table.selectedRowIndexes : tasks
 	}
 
 	func tableView(
@@ -158,6 +164,17 @@ final class TaskTableController: NSViewController, NSMenuDelegate, NSMenuItemVal
 			return
 		}
 		sendSortOrder()
+	}
+
+	func tableView(
+		_: NSTableView,
+		typeSelectStringFor tableColumn: NSTableColumn?,
+		row: Int,
+	) -> String? {
+		guard tableColumn?.identifier.rawValue == descriptionIdentifier else {
+			return nil
+		}
+		return self.row(at: row)?.task.description
 	}
 
 	func tableView(_: NSTableView, viewFor tableColumn: NSTableColumn?, row: Int) -> NSView? {
@@ -220,15 +237,11 @@ final class TaskTableController: NSViewController, NSMenuDelegate, NSMenuItemVal
 
 	/// Scrolls to the new-task row and puts the cursor in it.
 	private func beginNewTask() {
-		table.scrollRowToVisible(0)
 		let column = table.column(withIdentifier: NSUserInterfaceItemIdentifier(descriptionIdentifier))
-		guard
-			column >= 0,
-			let cell = table.view(atColumn: column, row: 0, makeIfNecessary: true) as? NewTaskCell
-		else {
+		guard column >= 0 else {
 			return
 		}
-		view.window?.makeFirstResponder(cell.textField)
+		table.editColumn(column, row: 0, with: nil, select: true)
 	}
 
 	/// Fits ID and Urgency to the widest value the rows show, never narrower than the header their

@@ -77,6 +77,34 @@ struct TaskTableControllerTests {
 	}
 
 	@Test
+	func `the new-task row takes the cursor and stays out of select all`() async throws {
+		let autosaveName = "test:\(UUID())"
+		defer {
+			removeAutosave(autosaveName)
+		}
+		var state = ReplicaFeature.State(bookmark: Data())
+		state.isReplicaOpen = true
+		let (store, table, window) = try await tableLoadingTaskrc(
+			autosaveName: autosaveName,
+			state: state,
+		)
+		defer {
+			withExtendedLifetime(window) {}
+		}
+		let seeds = 1 ... 3
+		let tasks = seeds.map { storedTask($0, "Task \($0)", workingSetID: $0) }
+		try await loadTasks(tasks, into: store, table: table)
+		store.send(.newTaskButtonTapped)
+		try await wait { table.numberOfRows == tasks.count + 1 }
+		#expect(window.firstResponder is NSText)
+
+		table.selectAll(nil)
+
+		#expect(table.selectedRowIndexes == IndexSet(1 ... tasks.count))
+		#expect(store.selection == Set(seeds.map { UUID($0) }))
+	}
+
+	@Test
 	func `restored layout draws columns in its order`() async throws {
 		let autosaveName = "test:\(UUID())"
 		defer {
@@ -191,8 +219,9 @@ private func storedTask(
 @MainActor
 private func tableLoadingTaskrc(
 	autosaveName: String,
+	state: ReplicaFeature.State = ReplicaFeature.State(bookmark: Data()),
 ) async throws -> (store: StoreOf<ReplicaFeature>, table: NSTableView, window: NSWindow) {
-	let store = Store(initialState: ReplicaFeature.State(bookmark: Data())) {
+	let store = Store(initialState: state) {
 		ReplicaFeature()
 	} withDependencies: {
 		$0.date.now = now
