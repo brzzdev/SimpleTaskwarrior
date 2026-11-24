@@ -77,7 +77,7 @@ struct TaskTableControllerTests {
 	}
 
 	@Test
-	func `select all leaves out the new-task row`() async throws {
+	func `the new-task row takes the cursor and stays out of select all`() async throws {
 		let autosaveName = "test:\(UUID())"
 		defer {
 			removeAutosave(autosaveName)
@@ -96,6 +96,7 @@ struct TaskTableControllerTests {
 		try await loadTasks(tasks, into: store, table: table)
 		store.send(.newTaskButtonTapped)
 		try await wait { table.numberOfRows == tasks.count + 1 }
+		#expect(window.firstResponder is NSText)
 
 		table.selectAll(nil)
 

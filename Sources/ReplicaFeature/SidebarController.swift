@@ -123,16 +123,7 @@ final class SidebarController: NSViewController, NSGestureRecognizerDelegate, NS
 		popover.show(relativeTo: sender.bounds, of: sender, preferredEdge: .minY)
 	}
 
-	@objc
-	func hiddenTagMenuItemChosen(_ sender: NSMenuItem) {
-		guard let tag = sender.representedObject as? String else {
-			return
-		}
-		store.send(.hiddenTagToggled(tag))
-	}
-
-	/// Takes up a click only with ⌥ down and on a tag. Each click of an ⌥-double-click starts a
-	/// stream of its own, and a second would undo the first.
+	/// The first click of an ⌥-double-click alone, since a second would undo the first.
 	func gestureRecognizer(
 		_: NSGestureRecognizer,
 		shouldAttemptToRecognizeWith event: NSEvent,
@@ -142,6 +133,14 @@ final class SidebarController: NSViewController, NSGestureRecognizerDelegate, NS
 		}
 		let point = outline.convert(event.locationInWindow, from: nil)
 		return tag(atRow: outline.row(at: point)) != nil
+	}
+
+	@objc
+	func hiddenTagMenuItemChosen(_ sender: NSMenuItem) {
+		guard let tag = sender.representedObject as? String else {
+			return
+		}
+		store.send(.hiddenTagToggled(tag))
 	}
 
 	/// Offers to hide or show a right-clicked tag, and nothing for any other row.
@@ -326,7 +325,6 @@ private final class SidebarNode {
 	let item: SidebarItem?
 	let title: String
 
-	/// Neither a section header nor a hidden tag.
 	var isSelectable: Bool {
 		item != nil && !isHidden
 	}
@@ -459,10 +457,13 @@ private final class ItemCell: NSTableCellView {
 		if countLabel.font?.pointSize != font.pointSize {
 			countLabel.font = .monospacedDigitSystemFont(ofSize: font.pointSize, weight: .regular)
 		}
-		textField.frame.size.width = max(
-			0,
-			countLabel.frame.minX - countSpacing - textField.frame.minX,
-		)
+		let title = textField.frame
+		let isRightToLeft = userInterfaceLayoutDirection == .rightToLeft
+		let width = isRightToLeft
+			? title.maxX - countLabel.frame.maxX - countSpacing
+			: countLabel.frame.minX - countSpacing - title.minX
+		let edge: CGRectEdge = isRightToLeft ? .maxXEdge : .minXEdge
+		textField.frame = title.divided(atDistance: max(0, width), from: edge).slice
 	}
 
 	/// A hidden tag reads struck through and dimmed, with a slashed symbol.

@@ -237,7 +237,6 @@ final class TaskTableController: NSViewController, NSMenuDelegate, NSMenuItemVal
 
 	/// Scrolls to the new-task row and puts the cursor in it.
 	private func beginNewTask() {
-		table.scrollRowToVisible(0)
 		let column = table.column(withIdentifier: NSUserInterfaceItemIdentifier(descriptionIdentifier))
 		guard column >= 0 else {
 			return
