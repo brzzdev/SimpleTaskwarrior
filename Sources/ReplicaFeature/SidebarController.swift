@@ -6,8 +6,8 @@ import Taskrc
 
 /// A source list of the store's sidebar, which sends back its selection and the tags it hides, and
 /// a footer naming the active Context.
-final class SidebarController: NSViewController, NSMenuDelegate, NSOutlineViewDataSource,
-	NSOutlineViewDelegate
+final class SidebarController: NSViewController, NSGestureRecognizerDelegate, NSMenuDelegate,
+	NSOutlineViewDataSource, NSOutlineViewDelegate
 {
 	private let contextFooter = NSStackView()
 	private let contextLabel = truncatingLabel()
@@ -16,7 +16,7 @@ final class SidebarController: NSViewController, NSMenuDelegate, NSOutlineViewDa
 	/// Set while the outline follows the store, so the changes it makes aren't sent back.
 	private var isFollowingStore = false
 	private var nodes: [SidebarNode] = []
-	private let outline = SidebarOutlineView()
+	private let outline = NSOutlineView()
 	private var sidebar: Sidebar?
 	private let store: StoreOf<ReplicaFeature>
 
@@ -71,14 +71,20 @@ final class SidebarController: NSViewController, NSMenuDelegate, NSOutlineViewDa
 		outline.allowsMultipleSelection = true
 		outline.floatsGroupRows = false
 		outline.headerView = nil
+		outline.rowSizeStyle = .default
 		outline.style = .sourceList
 		outline.dataSource = self
 		outline.delegate = self
 		outline.menu = NSMenu()
 		outline.menu?.delegate = self
-		outline.tagOptionClicked = { [weak self] tag in
-			self?.store.send(.hiddenTagToggled(tag))
-		}
+		let optionClick = NSClickGestureRecognizer(
+			target: self,
+			action: #selector(tagOptionClicked(_:)),
+		)
+		// So the outline never sees an ⌥-click on a tag, and selects nothing.
+		optionClick.delaysPrimaryMouseButtonEvents = true
+		optionClick.delegate = self
+		outline.addGestureRecognizer(optionClick)
 
 		observe { [weak self] in
 			self?.updateOutline()
@@ -125,11 +131,24 @@ final class SidebarController: NSViewController, NSMenuDelegate, NSOutlineViewDa
 		store.send(.hiddenTagToggled(tag))
 	}
 
+	/// Takes up a click only with ⌥ down and on a tag. Each click of an ⌥-double-click starts a
+	/// stream of its own, and a second would undo the first.
+	func gestureRecognizer(
+		_: NSGestureRecognizer,
+		shouldAttemptToRecognizeWith event: NSEvent,
+	) -> Bool {
+		guard event.modifierFlags.contains(.option), event.clickCount == 1 else {
+			return false
+		}
+		let point = outline.convert(event.locationInWindow, from: nil)
+		return tag(atRow: outline.row(at: point)) != nil
+	}
+
 	/// Offers to hide or show a right-clicked tag, and nothing for any other row.
 	func menuNeedsUpdate(_ menu: NSMenu) {
 		menu.removeAllItems()
 		let row = outline.clickedRow
-		guard let tag = outline.tag(atRow: row) else {
+		guard let tag = tag(atRow: row) else {
 			return
 		}
 		let isHidden = (outline.item(atRow: row) as? SidebarNode)?.isHidden == true
@@ -168,12 +187,25 @@ final class SidebarController: NSViewController, NSMenuDelegate, NSOutlineViewDa
 		selectionIndexesForProposedSelection proposed: IndexSet,
 	) -> IndexSet {
 		let selectable = proposed.filteredIndexSet { row in
-			guard let node = outline.item(atRow: row) as? SidebarNode else {
-				return false
-			}
-			return node.item != nil && !node.isHidden
+			(outline.item(atRow: row) as? SidebarNode)?.isSelectable == true
 		}
 		return selectable.isEmpty && !proposed.isEmpty ? outline.selectedRowIndexes : selectable
+	}
+
+	/// Dims a hidden tag's symbol.
+	func outlineView(_: NSOutlineView, tintConfigurationForItem item: Any) -> NSTintConfiguration? {
+		(item as? SidebarNode)?.isHidden == true ? .monochrome : nil
+	}
+
+	func outlineView(
+		_: NSOutlineView,
+		typeSelectStringFor _: NSTableColumn?,
+		item: Any,
+	) -> String? {
+		guard let node = item as? SidebarNode, node.isSelectable else {
+			return nil
+		}
+		return node.title
 	}
 
 	func outlineView(_: NSOutlineView, viewFor _: NSTableColumn?, item: Any) -> NSView? {
@@ -214,6 +246,14 @@ final class SidebarController: NSViewController, NSMenuDelegate, NSOutlineViewDa
 		store.send(.binding(.set(\.sidebarSelection, selection)))
 	}
 
+	@objc
+	func tagOptionClicked(_ recognizer: NSClickGestureRecognizer) {
+		guard let tag = tag(atRow: outline.row(at: recognizer.location(in: outline))) else {
+			return
+		}
+		store.send(.hiddenTagToggled(tag))
+	}
+
 	private func children(of item: Any?) -> [SidebarNode] {
 		guard let node = item as? SidebarNode else {
 			return nodes
@@ -224,6 +264,14 @@ final class SidebarController: NSViewController, NSMenuDelegate, NSOutlineViewDa
 	/// The node a expand or collapse notification is about.
 	private func expandedNode(in notification: Notification) -> SidebarNode? {
 		notification.userInfo?[outlineItemKey] as? SidebarNode
+	}
+
+	/// The tag `row` lists, or nil for any other row, or none.
+	private func tag(atRow row: Int) -> String? {
+		guard case let .tag(tag)? = (outline.item(atRow: row) as? SidebarNode)?.item else {
+			return nil
+		}
+		return tag
 	}
 
 	/// Shows the store's sidebar and its selection, reloading only when the sidebar changed, and
@@ -277,6 +325,11 @@ private final class SidebarNode {
 	let isHidden: Bool
 	let item: SidebarItem?
 	let title: String
+
+	/// Neither a section header nor a hidden tag.
+	var isSelectable: Bool {
+		item != nil && !isHidden
+	}
 
 	/// A section header.
 	init(title: String, children: [SidebarNode]) {
@@ -371,7 +424,7 @@ private final class HeaderCell: NSTableCellView {
 	}
 }
 
-/// A symbol, a title and a count.
+/// A symbol and a title, which AppKit sizes and places for the sidebar icon size, and a count.
 private final class ItemCell: NSTableCellView {
 	private let countLabel = NSTextField(labelWithString: "")
 
@@ -379,21 +432,13 @@ private final class ItemCell: NSTableCellView {
 		super.init(frame: .zero)
 		let symbol = NSImageView()
 		let title = truncatingLabel()
-		// So the title takes the row's spare width, and the count sits at its trailing edge.
-		title.setContentHuggingPriority(.defaultLow, for: .horizontal)
-		countLabel.font = .monospacedDigitSystemFont(ofSize: NSFont.systemFontSize, weight: .regular)
-		countLabel.setContentCompressionResistancePriority(.required, for: .horizontal)
-		let stack = NSStackView(views: [symbol, title, countLabel])
-		stack.distribution = .fill
-		stack.setCustomSpacing(4, after: symbol)
-		stack.translatesAutoresizingMaskIntoConstraints = false
-		addSubview(stack)
+		countLabel.translatesAutoresizingMaskIntoConstraints = false
+		for subview in [symbol, title, countLabel] {
+			addSubview(subview)
+		}
 		NSLayoutConstraint.activate([
-			stack.centerYAnchor.constraint(equalTo: centerYAnchor),
-			stack.leadingAnchor.constraint(equalTo: leadingAnchor),
-			stack.trailingAnchor.constraint(equalTo: trailingAnchor),
-			// Symbols differ in width, and the titles line up only past a fixed one.
-			symbol.widthAnchor.constraint(equalToConstant: symbolWidth),
+			countLabel.centerYAnchor.constraint(equalTo: centerYAnchor),
+			countLabel.trailingAnchor.constraint(equalTo: trailingAnchor),
 		])
 		imageView = symbol
 		textField = title
@@ -402,6 +447,22 @@ private final class ItemCell: NSTableCellView {
 	@available(*, unavailable)
 	required init?(coder: NSCoder) {
 		fatalError("init(coder:) has not been implemented")
+	}
+
+	/// Ends the title, which AppKit lays out to the trailing edge, short of the count, and sets the
+	/// count in the title's size.
+	override func layout() {
+		super.layout()
+		guard let textField, let font = textField.font else {
+			return
+		}
+		if countLabel.font?.pointSize != font.pointSize {
+			countLabel.font = .monospacedDigitSystemFont(ofSize: font.pointSize, weight: .regular)
+		}
+		textField.frame.size.width = max(
+			0,
+			countLabel.frame.minX - countSpacing - textField.frame.minX,
+		)
 	}
 
 	/// A hidden tag reads struck through and dimmed, with a slashed symbol.
@@ -418,7 +479,6 @@ private final class ItemCell: NSTableCellView {
 			// VoiceOver's only cue, since the strikethrough is visual alone.
 			accessibilityDescription: isHidden ? String(localized: "Hidden") : nil,
 		)
-		imageView?.contentTintColor = isHidden ? .secondaryLabelColor : nil
 		guard let textField else {
 			return
 		}
@@ -453,34 +513,9 @@ private func contextSummary(skipped: [String]) -> String {
 
 private let contextPopoverWidth: CGFloat = 260
 
+/// Between an item's title and its count.
+private let countSpacing: CGFloat = 8
+
 /// Where an outline's expand and collapse notifications carry the item, as `NSOutlineView`
 /// documents.
 private let outlineItemKey = "NSObject"
-
-private let symbolWidth: CGFloat = 20
-
-/// An outline that hands an ⌥-click on a tag to `tagOptionClicked` in place of selecting it.
-private final class SidebarOutlineView: NSOutlineView {
-	var tagOptionClicked: (String) -> Void = { _ in }
-
-	/// Each click of an ⌥-double-click arrives here, and a second would undo the first.
-	override func mouseDown(with event: NSEvent) {
-		guard
-			event.modifierFlags.contains(.option),
-			event.clickCount == 1,
-			let tag = tag(atRow: row(at: convert(event.locationInWindow, from: nil)))
-		else {
-			super.mouseDown(with: event)
-			return
-		}
-		tagOptionClicked(tag)
-	}
-
-	/// The tag `row` lists, or nil for any other row, or none.
-	func tag(atRow row: Int) -> String? {
-		guard case let .tag(tag)? = (item(atRow: row) as? SidebarNode)?.item else {
-			return nil
-		}
-		return tag
-	}
-}

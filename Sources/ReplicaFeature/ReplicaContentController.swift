@@ -285,10 +285,11 @@ func captionLabel(_ string: String, color: NSColor) -> NSTextField {
 	return label
 }
 
-/// A label that tail-truncates.
+/// A label that tail-truncates, and shows its full text on hover where it does.
 @MainActor
 func truncatingLabel() -> NSTextField {
 	let label = NSTextField(labelWithString: "")
+	label.allowsExpansionToolTips = true
 	label.lineBreakMode = .byTruncatingTail
 	label.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
 	return label
